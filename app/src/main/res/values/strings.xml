@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gemma 4 On-Device Test</string>
+    <string name="pick_model">모델 선택</string>
+    <string name="download_gemma">Gemma 4 2bit 다운로드</string>
+    <string name="load_model">모델 로드</string>
+    <string name="unload_model">모델 언로드</string>
+    <string name="selected_model">현재 선택: %1$s</string>
+    <string name="download_progress">다운로드 진행률: %1$d%%</string>
+    <string name="prompt_hint">질문을 입력하세요</string>
+    <string name="send">보내기</string>
+    <string name="nav_chat">채팅</string>
+    <string name="nav_model">모델</string>
+    <string name="nav_status">상태</string>
+    <string name="toolbar_title">Gemma 4 Chat</string>
+    <string name="toolbar_subtitle">온디바이스 테스트</string>
+    <string name="chat_empty_title">대화를 시작할 준비가 됐습니다</string>
+    <string name="chat_empty_body">모델을 로드한 뒤 질문을 보내면 응답이 이 영역에 표시됩니다.</string>
+    <string name="model_section_title">모델 준비</string>
+    <string name="status_section_title">실행 상태</string>
+    <string name="status_hint">현재 선택된 모델과 로드 상태를 여기서 확인할 수 있습니다.</string>
+    <string name="back_description">뒤로가기</string>
+</resources>

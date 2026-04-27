@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorBackground">#BFD1E0</color>
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorSurfaceStrong">#FAE100</color>
+    <color name="colorBorder">#D7DEE5</color>
+    <color name="colorPrimary">#FAE100</color>
+    <color name="colorAccent">#3A1D1D</color>
+    <color name="colorAccentDark">#6A737D</color>
+    <color name="colorTextPrimary">#202124</color>
+    <color name="colorTextSecondary">#5E6770</color>
+    <color name="colorTextMuted">#88919A</color>
+    <color name="colorUserBubble">#FAE100</color>
+    <color name="colorModelBubble">#FFFFFF</color>
+</resources>
