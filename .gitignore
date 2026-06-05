@@ -1,0 +1,25 @@
+# Android / Gradle
+.gradle/
+build/
+*/build/
+local.properties
+
+# IDE / tool metadata
+.idea/
+.kotlin/
+.omx/
+
+# Local agent state
+.claude/
+.codex
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Local models and generated assets
+*.litertlm
+
+# OS noise
+.DS_Store
+Thumbs.db
