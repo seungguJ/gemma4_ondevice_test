@@ -70,6 +70,7 @@ LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.
 ![WalletMate module view](docs/diagrams/module-view.svg)
 
 PlantUML source: `docs/diagrams/module-view.puml`
+`App Preferences`는 `SharedPreferences` 기반의 세션, 모델 선택, 일정 설정, 카드 거래 저장소를 묶어 표현한 것입니다.
 
 ## 모듈 문서
 

@@ -25,13 +25,8 @@ package "Feature Modules" {
 package "Data / Assets" {
   [Bundled Knowledge Assets]
   [User Knowledge Storage]
-  [Preferences]
+  [App Preferences]
   [Model Files]
-}
-
-package "Build / Ops" {
-  [Build And Assets]
-  [Codex-Claude Runtime]
 }
 
 [App Shell\nMainActivity / GemmaComposeUi] --> [Chat Session]
@@ -47,17 +42,13 @@ package "Build / Ops" {
 [Knowledge Routing] --> [Bundled Knowledge Assets]
 [Knowledge Routing] --> [User Knowledge Storage]
 [Document Import] --> [User Knowledge Storage]
-[Chat Session] --> [Preferences]
+[Chat Session] --> [App Preferences]
 [Model Runtime] --> [Model Files]
-[Model Runtime] --> [Preferences]
-[Schedule] --> [Preferences]
+[Model Runtime] --> [App Preferences]
+[Schedule] --> [App Preferences]
 
 [Wallet Notification Intake] --> [Wallet Transaction Parser]
 [Wallet Transaction Parser] --> [Card Expense Ledger]
-[Card Expense Ledger] --> [Preferences]
+[Card Expense Ledger] --> [App Preferences]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Wallet Notification Intake]
-
-[Build And Assets] --> [Bundled Knowledge Assets]
-[Build And Assets] --> [Model Files]
-[Codex-Claude Runtime] ..> [Build And Assets]
 @enduml
