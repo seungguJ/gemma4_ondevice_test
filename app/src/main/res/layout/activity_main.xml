@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/colorBackground"
+    android:background="@color/colorAppBackground"
     android:orientation="vertical">
 
     <LinearLayout
@@ -51,150 +52,295 @@
         android:id="@+id/content_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingStart="0dp"
-        android:paddingTop="0dp"
-        android:paddingEnd="0dp"
-        android:paddingBottom="0dp">
+        android:layout_weight="1">
 
         <LinearLayout
             android:id="@+id/screen_chat"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/button_expand_sidebar"
+                android:layout_width="44dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_sidebar"
+                android:gravity="center"
+                android:text="@string/expand_sidebar"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="#D9E5EF"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingHorizontal="14dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="8dp">
+                android:id="@+id/chat_sidebar"
+                android:layout_width="170dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_sidebar"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/new_chat_title"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/button_collapse_sidebar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:paddingVertical="7dp"
+                    android:text="@string/collapse_sidebar"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_new_general_chat"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="8dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="@string/chat_kind_general"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_new_finance_chat"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="@string/chat_kind_finance"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="13sp" />
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
                     <TextView
-                        android:id="@+id/text_selected_model"
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="현재 선택: 직접 선택"
+                        android:layout_weight="1"
+                        android:text="@string/conversation_list_title"
                         android:textColor="@color/colorTextPrimary"
                         android:textSize="13sp"
                         android:textStyle="bold" />
+                </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/text_model_info"
+                <LinearLayout
+                    android:id="@+id/session_list_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recycler_sessions"
                         android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@color/colorSurface"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="모델 없음"
-                        android:textColor="@color/colorTextSecondary"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/text_selected_model"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="현재 선택: 직접 선택"
+                            android:textColor="@color/colorTextPrimary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/text_model_info"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="모델 없음"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_load_model"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="30dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="56dp"
+                        android:minHeight="0dp"
+                        android:paddingHorizontal="8dp"
+                        android:text="@string/load_model"
+                        android:textColor="@color/colorTextPrimary"
                         android:textSize="11sp" />
                 </LinearLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/button_load_model"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:textColor="@color/colorTextPrimary"
-                    android:text="@string/load_model" />
-            </LinearLayout>
-
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:background="@color/colorBackground">
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recycler_chat"
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:clipToPadding="false"
-                    android:paddingStart="8dp"
-                    android:paddingTop="8dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="10dp" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="@color/colorAppBackground">
 
-                <LinearLayout
-                    android:id="@+id/chat_empty_state"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:padding="24dp">
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recycler_chat"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:paddingStart="8dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="10dp" />
 
-                    <TextView
+                    <LinearLayout
+                        android:id="@+id/chat_empty_state"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="24dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/chat_empty_title"
+                            android:textColor="@color/colorTextPrimary"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="280dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:text="@string/chat_empty_body"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/chat_loading_container"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/chat_empty_title"
-                        android:textColor="@color/colorTextPrimary"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
+                        android:layout_gravity="bottom|start"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_input"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:visibility="gone">
 
-                    <TextView
-                        android:layout_width="280dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center"
-                        android:text="@string/chat_empty_body"
-                        android:textColor="@color/colorTextSecondary"
-                        android:textSize="13sp" />
-                </LinearLayout>
-            </FrameLayout>
+                        <com.google.android.material.progressindicator.CircularProgressIndicator
+                            android:id="@+id/progress_chat_loading"
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:indeterminate="true"
+                            app:indicatorColor="@color/colorAccent"
+                            app:indicatorSize="18dp"
+                            app:trackThickness="2dp" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@color/colorSurface"
-                android:gravity="bottom"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingTop="8dp"
-                android:paddingEnd="10dp"
-                android:paddingBottom="8dp">
+                        <TextView
+                            android:id="@+id/text_chat_loading"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/chat_loading_default"
+                            android:textColor="@color/colorTextPrimary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </FrameLayout>
 
-                <EditText
-                    android:id="@+id/edit_prompt"
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_input"
-                    android:gravity="top|start"
-                    android:hint="@string/prompt_hint"
-                    android:inputType="textMultiLine|textCapSentences"
-                    android:maxLines="4"
-                    android:minHeight="52dp"
-                    android:paddingHorizontal="14dp"
-                    android:paddingVertical="12dp"
-                    android:textColor="@color/colorTextPrimary"
-                    android:textColorHint="@color/colorTextMuted" />
+                    android:background="@drawable/bg_composer"
+                    android:gravity="bottom"
+                    android:orientation="horizontal"
+                    android:paddingStart="10dp"
+                    android:paddingTop="8dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="8dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/button_send"
-                    android:layout_width="@dimen/composer_button_size"
-                    android:layout_height="@dimen/composer_button_size"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_send_button"
-                    android:contentDescription="@string/send"
-                    android:enabled="false"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    app:icon="@drawable/ic_send_arrow"
-                    app:iconGravity="textStart"
-                    app:iconPadding="0dp"
-                    app:iconTint="@null" />
+                    <EditText
+                        android:id="@+id/edit_prompt"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input"
+                        android:gravity="top|start"
+                        android:hint="@string/prompt_hint"
+                        android:inputType="textMultiLine|textCapSentences"
+                        android:maxLines="4"
+                        android:minHeight="52dp"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="12dp"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textColorHint="@color/colorTextMuted" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_send"
+                        android:layout_width="76dp"
+                        android:layout_height="52dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_send_button"
+                        android:contentDescription="@string/send"
+                        android:enabled="false"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/send"
+                        android:textColor="@color/colorSendText"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        app:icon="@drawable/ic_send_arrow"
+                        app:iconGravity="textEnd"
+                        app:iconPadding="4dp"
+                        app:iconTint="@color/colorSendText" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
 
@@ -256,6 +402,22 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:text="@string/pick_model" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_pick_function_gemma"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/pick_function_gemma" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_open_function_gemma_link"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/open_function_gemma_link" />
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>

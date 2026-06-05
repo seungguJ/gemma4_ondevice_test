@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
@@ -19,6 +20,12 @@ object LlmEngine {
     private var engine: Engine? = null
     private var loaded = false
     private var lastError: String? = null
+    private val conversations = mutableMapOf<String, Conversation>()
+
+    var lastLoadDurationMs: Long = -1L
+        private set
+    var lastFreeTimestamp: Long = -1L
+        private set
 
     val isLoaded: Boolean
         get() = loaded
@@ -38,7 +45,7 @@ object LlmEngine {
     data class LlmConfig(
         val maxTokens: Int = 256,
         val contextSize: Int = 2048,
-        val systemInstruction: String = "너는 간결하고 자연스러운 한국어 도우미다."
+        val systemInstruction: String = "반드시 한국어로만 답하라. You must respond only in Korean. 너는 간결하고 자연스러운 한국어 도우미다."
     )
 
     fun loadModel(
@@ -69,18 +76,22 @@ object LlmEngine {
                     cacheDir = context.cacheDir.path,
                     maxNumTokens = config.contextSize
                 )
+                val startMs = System.currentTimeMillis()
                 engine = Engine(engineConfig).also { it.initialize() }
+                lastLoadDurationMs = System.currentTimeMillis() - startMs
                 loaded = engine != null
                 if (!loaded) {
                     lastError = "엔진 초기화에 실패했습니다."
                 } else {
                     lastError = null
+                    Log.i(TAG, "Model loaded in ${lastLoadDurationMs}ms (${modelFile.name})")
                 }
                 loaded
             } catch (e: Exception) {
                 engine?.close()
                 engine = null
                 loaded = false
+                lastLoadDurationMs = -1L
                 lastError = "모델 로드 실패: ${e.message}"
                 Log.e(TAG, "Model load failed", e)
                 false
@@ -88,7 +99,12 @@ object LlmEngine {
         }
     }
 
-    fun generate(
+    fun hasConversation(sessionId: String): Boolean {
+        synchronized(lock) { return conversations.containsKey(sessionId) }
+    }
+
+    fun generateForSession(
+        sessionId: String,
         prompt: String,
         config: LlmConfig = LlmConfig()
     ): String {
@@ -98,39 +114,53 @@ object LlmEngine {
                 lastError = "모델이 아직 로드되지 않았습니다."
                 return ""
             }
-
             return try {
+                val conversation = conversations.getOrPut(sessionId) {
+                    currentEngine.createConversation(
+                        ConversationConfig(systemInstruction = Contents.of(config.systemInstruction))
+                    )
+                }
                 val output = StringBuilder()
-                val conversationConfig = ConversationConfig(
-                    systemInstruction = Contents.of(config.systemInstruction)
-                )
-                currentEngine.createConversation(conversationConfig).use { conversation ->
-                    runBlocking {
-                        conversation.sendMessageAsync(prompt).collect { chunk ->
-                            output.append(chunk.toString())
-                            if (output.length >= config.maxTokens * 6) {
-                                return@collect
-                            }
-                        }
+                runBlocking {
+                    conversation.sendMessageAsync(prompt).collect { chunk ->
+                        output.append(chunk.toString())
+                        if (output.length >= config.maxTokens * 6) return@collect
                     }
                 }
                 output.toString().trim()
             } catch (e: Exception) {
+                conversations.remove(sessionId)?.runCatching { close() }
                 lastError = "응답 생성 실패: ${e.message}"
-                Log.e(TAG, "Generation failed", e)
+                Log.e(TAG, "Session generation failed", e)
                 ""
             }
         }
     }
 
+    fun clearSession(sessionId: String) {
+        synchronized(lock) {
+            conversations.remove(sessionId)?.runCatching { close() }
+            Log.i(TAG, "Cleared conversation for session $sessionId")
+        }
+    }
+
     fun free() {
         synchronized(lock) {
-            try {
-                engine?.close()
-            } catch (_: Exception) {
+            conversations.values.forEach { runCatching { it.close() } }
+            conversations.clear()
+            if (engine != null) {
+                lastFreeTimestamp = System.currentTimeMillis()
+                Log.i(TAG, "Freeing engine at ${lastFreeTimestamp}")
+                try {
+                    engine?.close()
+                } catch (_: Exception) {
+                }
+                engine = null
+                loaded = false
+                Log.i(TAG, "Engine freed (was loaded for ${
+                    if (lastLoadDurationMs >= 0) "${lastLoadDurationMs}ms" else "unknown"
+                })")
             }
-            engine = null
-            loaded = false
         }
     }
 

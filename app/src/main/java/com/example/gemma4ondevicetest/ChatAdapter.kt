@@ -28,6 +28,13 @@ class ChatAdapter(
         notifyItemInserted(items.lastIndex)
     }
 
+    fun replaceMessages(messages: List<ChatMessage>) {
+        val nextMessages = messages.toList()
+        items.clear()
+        items.addAll(nextMessages)
+        notifyDataSetChanged()
+    }
+
     class ChatViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val bubble: TextView = itemView.findViewById(R.id.message_bubble)
         private val largeMargin = itemView.resources.getDimensionPixelSize(R.dimen.message_margin_large)

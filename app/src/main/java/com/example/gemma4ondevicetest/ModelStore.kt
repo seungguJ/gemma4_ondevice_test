@@ -2,6 +2,7 @@ package com.example.gemma4ondevicetest
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -63,10 +64,54 @@ object ModelStore {
     }
 
     suspend fun importModel(context: Context, sourceUri: Uri): Result<File> = withContext(Dispatchers.IO) {
+        importModel(context, sourceUri, CUSTOM, selectAfterImport = true)
+    }
+
+    suspend fun importModel(
+        context: Context,
+        sourceUri: Uri,
+        source: ModelSource,
+        selectAfterImport: Boolean = false
+    ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
-            val copied = copyUriToPublicDownloads(context, sourceUri, CUSTOM)
-            setSelectedModel(context, CUSTOM)
-            copied
+            if (source == CUSTOM) {
+                // SAF URI를 직접 저장 — 2.5GB 복사 불필요
+                // 런타임 복사는 prepareRuntimeModelFile에서 최초 1회만 수행
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        sourceUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
+                setStoredLocation(context, source, PublicLocation.ContentUri(sourceUri))
+                clearRuntimeCopy(context, source)
+                if (selectAfterImport) setSelectedModel(context, source)
+                File(getUserVisiblePath(source))
+            } else {
+                val copied = copyUriToPublicDownloads(context, sourceUri, source)
+                if (selectAfterImport) setSelectedModel(context, source)
+                copied
+            }
+        }
+    }
+
+    suspend fun installBundledModelIfAvailable(
+        context: Context,
+        source: ModelSource,
+        assetName: String
+    ): Result<File?> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (hasModel(context, source)) {
+                return@runCatching null
+            }
+            val publicLocation = createPublicDestination(context, source)
+            context.assets.open(assetName).use { input ->
+                publicLocation.openOutputStream(context).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            setStoredLocation(context, source, publicLocation)
+            clearRuntimeCopy(context, source)
+            File(getUserVisiblePath(source))
         }
     }
 
@@ -121,19 +166,52 @@ object ModelStore {
         }
     }
 
+    fun hasRuntimeFile(context: Context, source: ModelSource): Boolean {
+        val runtimeFile = File(File(context.filesDir, RUNTIME_DIR), source.fileName)
+        return runtimeFile.exists() && runtimeFile.length() > 0
+    }
+
+    suspend fun installAssetToRuntime(
+        context: Context,
+        source: ModelSource,
+        assetName: String
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val runtimeDir = File(context.filesDir, RUNTIME_DIR)
+            if (!runtimeDir.exists()) runtimeDir.mkdirs()
+            val runtimeFile = File(runtimeDir, source.fileName)
+            val minValidSize = source.expectedSizeBytes?.let { it * 9 / 10 } ?: 1024L
+            if (runtimeFile.exists() && runtimeFile.length() >= minValidSize) {
+                return@runCatching runtimeFile
+            }
+            if (runtimeFile.exists()) runtimeFile.delete()
+            context.assets.open(assetName).use { input ->
+                runtimeFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            runtimeFile
+        }
+    }
+
     fun prepareRuntimeModelFile(
         context: Context,
         source: ModelSource = getSelectedModel(context)
     ): Result<File> {
         return runCatching {
+            val runtimeDir = File(context.filesDir, RUNTIME_DIR)
+            if (!runtimeDir.exists()) runtimeDir.mkdirs()
+            val runtimeFile = File(runtimeDir, source.fileName)
+
+            val minValidSize = source.expectedSizeBytes?.let { it * 9 / 10 } ?: 1024L
+            if (runtimeFile.exists() && runtimeFile.length() >= minValidSize) {
+                return@runCatching runtimeFile
+            }
+            if (runtimeFile.exists()) runtimeFile.delete()
+
             val publicLocation = getPublicLocation(context, source)
                 ?: error("모델 파일이 없습니다. 먼저 ${source.label} 모델을 준비하세요.")
 
-            val runtimeDir = File(context.filesDir, RUNTIME_DIR)
-            if (!runtimeDir.exists()) {
-                runtimeDir.mkdirs()
-            }
-            val runtimeFile = File(runtimeDir, source.fileName)
             publicLocation.openInputStream(context).use { input ->
                 runtimeFile.outputStream().use { output ->
                     input.copyTo(output)
