@@ -67,71 +67,9 @@ LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.
 
 ## Module View
 
-```plantuml
-@startuml
-skinparam componentStyle rectangle
-skinparam packageStyle rectangle
-skinparam shadowing false
+![WalletMate module view](docs/diagrams/module-view.svg)
 
-package "UI Layer" {
-  [App Shell\nMainActivity / GemmaComposeUi]
-  [Schedule UI\nScheduleScreen]
-}
-
-package "Core Runtime" {
-  [Chat Session]
-  [Model Runtime]
-  [Knowledge Routing]
-  [Document Import]
-}
-
-package "Feature Modules" {
-  [Schedule]
-  [Wallet Notification Intake]
-  [Wallet Transaction Parser]
-  [Card Expense Ledger]
-}
-
-package "Data / Assets" {
-  [Bundled Knowledge Assets]
-  [User Knowledge Storage]
-  [Preferences]
-  [Model Files]
-}
-
-package "Build / Ops" {
-  [Build And Assets]
-  [Codex-Claude Runtime]
-}
-
-[App Shell\nMainActivity / GemmaComposeUi] --> [Chat Session]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Model Runtime]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Knowledge Routing]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Document Import]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Schedule]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Card Expense Ledger]
-
-[Schedule UI\nScheduleScreen] --> [Schedule]
-[Schedule] --> [Model Runtime]
-
-[Knowledge Routing] --> [Bundled Knowledge Assets]
-[Knowledge Routing] --> [User Knowledge Storage]
-[Document Import] --> [User Knowledge Storage]
-[Chat Session] --> [Preferences]
-[Model Runtime] --> [Model Files]
-[Model Runtime] --> [Preferences]
-[Schedule] --> [Preferences]
-
-[Wallet Notification Intake] --> [Wallet Transaction Parser]
-[Wallet Transaction Parser] --> [Card Expense Ledger]
-[Card Expense Ledger] --> [Preferences]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Wallet Notification Intake]
-
-[Build And Assets] --> [Bundled Knowledge Assets]
-[Build And Assets] --> [Model Files]
-[Codex-Claude Runtime] ..> [Build And Assets]
-@enduml
-```
+PlantUML source: `docs/diagrams/module-view.puml`
 
 ## 모듈 문서
 
