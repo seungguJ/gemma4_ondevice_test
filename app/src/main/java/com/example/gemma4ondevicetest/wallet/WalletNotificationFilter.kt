@@ -3,7 +3,8 @@ package com.example.gemma4ondevicetest.wallet
 object WalletNotificationFilter {
 
     fun shouldProcess(raw: WalletRawNotification): Boolean {
-        if (raw.packageName !in WalletParserRules.ALLOWED_PACKAGES) return false
+        val isAllowedPackage = raw.packageName in WalletParserRules.ALLOWED_PACKAGES
+        if (!isAllowedPackage && !WalletParserRules.titleIndicatesCard(raw.title)) return false
 
         val combined = listOf(raw.title, raw.text, raw.bigText)
             .filter { it.isNotBlank() }

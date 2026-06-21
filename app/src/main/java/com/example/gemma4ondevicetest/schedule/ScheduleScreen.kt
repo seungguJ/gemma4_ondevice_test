@@ -68,8 +68,7 @@ fun ScheduleScreen(
     onRefresh: () -> Unit,
     onToggleNotification: (Boolean) -> Unit,
     onTimeChanged: (hour: Int, minute: Int) -> Unit = { _, _ -> },
-    onRunNow: () -> Unit,
-    onTestAlarm: (() -> Unit)? = null
+    onRunNow: () -> Unit
 ) {
     Column(
         Modifier
@@ -89,8 +88,7 @@ fun ScheduleScreen(
             modelLoaded   = modelLoaded,
             onToggle      = onToggleNotification,
             onTimeChanged = onTimeChanged,
-            onRunNow      = onRunNow,
-            onTestAlarm   = onTestAlarm
+            onRunNow      = onRunNow
         )
 
         // ── Content ──
@@ -156,8 +154,7 @@ private fun ScheduleHeaderCard(
     modelLoaded: Boolean,
     onToggle: (Boolean) -> Unit,
     onTimeChanged: (Int, Int) -> Unit,
-    onRunNow: () -> Unit,
-    onTestAlarm: (() -> Unit)? = null
+    onRunNow: () -> Unit
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
 
@@ -286,19 +283,6 @@ private fun ScheduleHeaderCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ModelChip(loaded = modelLoaded)
                 Spacer(Modifier.weight(1f))
-                if (onTestAlarm != null) {
-                    OutlinedButton(
-                        onClick = onTestAlarm,
-                        shape   = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        colors  = ButtonDefaults.outlinedButtonColors(contentColor = CAmber)
-                    ) {
-                        Icon(Icons.Outlined.Alarm, null, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("60초 테스트", fontSize = 12.sp)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
                 OutlinedButton(
                     onClick = onRunNow,
                     enabled = modelLoaded,

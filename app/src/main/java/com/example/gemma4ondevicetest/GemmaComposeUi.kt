@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,10 +44,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gemma4ondevicetest.wallet.CardExpenseInsightReport
+import com.example.gemma4ondevicetest.wallet.CardExpenseInsightCandidate
+import com.example.gemma4ondevicetest.wallet.CardExpenseInsightCandidateSource
+import com.example.gemma4ondevicetest.wallet.CardExpenseMonthlyInsight
 import com.example.gemma4ondevicetest.wallet.CardTransactionRecord
+import com.example.gemma4ondevicetest.wallet.ExpenseCategoryBreakdown
 import com.example.gemma4ondevicetest.wallet.MonthlyCardSummary
+import com.example.gemma4ondevicetest.wallet.CardExpenseInsightHistoryReducer
+import com.example.gemma4ondevicetest.wallet.BatteryGateStatus
+import com.example.gemma4ondevicetest.wallet.SubscriptionAnalysisReport
+import com.example.gemma4ondevicetest.wallet.SubscriptionAnalysisScheduler
 import com.example.gemma4ondevicetest.wallet.TransactionStatus
-import com.example.gemma4ondevicetest.wallet.WalletNotificationLogEntry
+import com.example.gemma4ondevicetest.usage.AppUsageAllowlistPolicy
+import com.example.gemma4ondevicetest.usage.AppUsageSessionRecord
+import com.example.gemma4ondevicetest.usage.AppUsageStatsSummary
+import com.example.gemma4ondevicetest.usage.AppUsageTopApp
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -54,7 +68,7 @@ import java.util.Locale
 
 // ─────────────────────── data models ───────────────────────
 
-enum class AppScreen { HOME, CHAT, WALLET, MODEL, STATUS, DOCUMENTS, DOCUMENT_VIEWER, SCHEDULE }
+enum class AppScreen { HOME, CHAT, WALLET, SUBSCRIPTIONS, APP_USAGE, MODEL, STATUS, DOCUMENTS, DOCUMENT_VIEWER, SCHEDULE }
 
 data class BusyUiState(
     val visible: Boolean = false,
@@ -100,7 +114,16 @@ data class AppUiState(
     val walletRecentTransactions: List<CardTransactionRecord> = emptyList(),
     val walletPermissionGranted: Boolean = false,
     val selectedTransaction: CardTransactionRecord? = null,
-    val walletNotificationLogs: List<WalletNotificationLogEntry> = emptyList()
+    val subscriptionReport: SubscriptionAnalysisReport = SubscriptionAnalysisReport(0L, 0L, "아직 분석 기록이 없습니다.", 0, emptyList()),
+    val subscriptionBatteryStatus: BatteryGateStatus = BatteryGateStatus(isCharging = false, levelPercent = 0),
+    val cardExpenseInsightReport: CardExpenseInsightReport = CardExpenseInsightReport("", 0L, 0L, 0, 0, "아직 분석 기록이 없습니다.", emptyList(), emptyList()),
+    val cardExpenseInsightHistory: List<CardExpenseMonthlyInsight> = emptyList(),
+    val cardExpenseInsightItems: List<CardExpenseInsightCandidate> = emptyList(),
+    val cardExpenseInsightRunning: Boolean = false,
+    val appUsagePermissionGranted: Boolean = false,
+    val appUsageSummary: AppUsageStatsSummary = AppUsageStatsSummary(),
+    val appUsageRecentSessions: List<AppUsageSessionRecord> = emptyList(),
+    val appUsageTopApps: List<AppUsageTopApp> = emptyList()
 )
 
 // ─────────────────────── color tokens ───────────────────────
@@ -163,6 +186,8 @@ fun GemmaApp(
     onOpenHome: () -> Unit,
     onOpenDrawerChat: () -> Unit,
     onOpenWallet: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
+    onOpenAppUsage: () -> Unit,
     onOpenDrawerModel: () -> Unit,
     onOpenDrawerStatus: () -> Unit,
     onOpenDrawerDocuments: () -> Unit,
@@ -190,8 +215,15 @@ fun GemmaApp(
     onWalletOpenPermissionSettings: () -> Unit = {},
     onWalletSelectTransaction: (CardTransactionRecord) -> Unit = {},
     onWalletDismissTransaction: () -> Unit = {},
-    onWalletClearLog: () -> Unit = {},
-    onScheduleTestAlarm: (() -> Unit)? = null,
+    onAppUsageOpenPermissionSettings: () -> Unit = {},
+    onAppUsageRunSync: () -> Unit = {},
+    onAppUsageExportCsv: () -> Unit = {},
+    onAppUsageClearLog: () -> Unit = {},
+    onRunSubscriptionAnalysis: () -> Unit = {},
+    onRunCardInsightAnalysis: () -> Unit = {},
+    onReanalyzeCardInsightAnalysis: () -> Unit = {},
+    onReanalyzeCardInsightItem: (CardExpenseInsightCandidate) -> Unit = {},
+    onResetCardInsightAnalysis: () -> Unit = {},
     onEnterText: (String, String) -> Unit = { _, _ -> }
 ) {
     val drawerState  = rememberDrawerState(DrawerValue.Closed)
@@ -230,6 +262,8 @@ fun GemmaApp(
                         onOpenHome         = { onOpenHome(); scope.launch { drawerState.close() } },
                         onOpenChat         = { onOpenDrawerChat(); scope.launch { drawerState.close() } },
                         onOpenWallet       = { onOpenWallet(); scope.launch { drawerState.close() } },
+                        onOpenSubscriptions = { onOpenSubscriptions(); scope.launch { drawerState.close() } },
+                        onOpenAppUsage     = { onOpenAppUsage(); scope.launch { drawerState.close() } },
                         onOpenModel        = { onOpenDrawerModel(); scope.launch { drawerState.close() } },
                         onOpenStatus       = { onOpenDrawerStatus(); scope.launch { drawerState.close() } },
                         onOpenDocuments    = { onOpenDrawerDocuments(); scope.launch { drawerState.close() } },
@@ -261,11 +295,18 @@ fun GemmaApp(
                             AppScreen.HOME -> HomeScreen(
                                 walletSummary = uiState.walletMonthlySummary,
                                 walletPermissionGranted = uiState.walletPermissionGranted,
+                                subscriptionReport = uiState.subscriptionReport,
+                                cardInsightReport = uiState.cardExpenseInsightReport,
+                                cardInsightItems = uiState.cardExpenseInsightItems,
                                 scheduleUiState = uiState.scheduleUiState,
                                 answerModelReady = uiState.answerModelReady,
+                                appUsagePermissionGranted = uiState.appUsagePermissionGranted,
+                                appUsageSummary = uiState.appUsageSummary,
                                 onOpenWallet = onOpenWallet,
+                                onOpenSubscriptions = onOpenSubscriptions,
                                 onOpenSchedule = onOpenSchedule,
-                                onOpenChat = onOpenDrawerChat
+                                onOpenChat = onOpenDrawerChat,
+                                onOpenAppUsage = onOpenAppUsage
                             )
                             AppScreen.CHAT -> ChatScreen(
                                 messages           = activeSession?.messages.orEmpty(),
@@ -283,11 +324,32 @@ fun GemmaApp(
                                 transactions = uiState.walletRecentTransactions,
                                 permissionGranted = uiState.walletPermissionGranted,
                                 selectedTransaction = uiState.selectedTransaction,
-                                notificationLogs = uiState.walletNotificationLogs,
+                                insightReport = uiState.cardExpenseInsightReport,
+                                insightHistory = uiState.cardExpenseInsightHistory,
+                                insightItems = uiState.cardExpenseInsightItems,
+                                insightRunning = uiState.cardExpenseInsightRunning,
                                 onOpenPermissionSettings = onWalletOpenPermissionSettings,
                                 onSelectTransaction = onWalletSelectTransaction,
                                 onDismissTransaction = onWalletDismissTransaction,
-                                onClearLog = onWalletClearLog
+                                onRunInsightAnalysis = onRunCardInsightAnalysis,
+                                onReanalyzeInsightAnalysis = onReanalyzeCardInsightAnalysis,
+                                onReanalyzeInsightItem = onReanalyzeCardInsightItem,
+                                onResetInsightAnalysis = onResetCardInsightAnalysis
+                            )
+                            AppScreen.SUBSCRIPTIONS -> SubscriptionScreen(
+                                report = uiState.subscriptionReport,
+                                batteryStatus = uiState.subscriptionBatteryStatus,
+                                onRunAnalysis = onRunSubscriptionAnalysis
+                            )
+                            AppScreen.APP_USAGE -> AppUsageScreen(
+                                permissionGranted = uiState.appUsagePermissionGranted,
+                                summary = uiState.appUsageSummary,
+                                topApps = uiState.appUsageTopApps,
+                                recentSessions = uiState.appUsageRecentSessions,
+                                onOpenPermissionSettings = onAppUsageOpenPermissionSettings,
+                                onRunSync = onAppUsageRunSync,
+                                onExportCsv = onAppUsageExportCsv,
+                                onClearLog = onAppUsageClearLog
                             )
                             AppScreen.MODEL -> ModelScreen(
                                 uiState         = uiState,
@@ -314,16 +376,26 @@ fun GemmaApp(
                                     )
                                 }
                             }
-                            AppScreen.SCHEDULE -> com.example.gemma4ondevicetest.schedule.ScheduleScreen(
-                                uiState                  = uiState.scheduleUiState,
-                                modelLoaded              = uiState.answerModelLoaded,
-                                onRequestPermissions     = onScheduleRequestPermissions,
-                                onRefresh                = onScheduleRefresh,
-                                onToggleNotification     = onScheduleToggleNotification,
-                                onTimeChanged            = onScheduleTimeChanged,
-                                onRunNow                 = onScheduleRunNow,
-                                onTestAlarm              = onScheduleTestAlarm
-                            )
+                            AppScreen.SCHEDULE -> Column(Modifier.fillMaxSize()) {
+                                val financeNote = buildScheduleFinanceLine(
+                                    subscriptionReport = uiState.subscriptionReport,
+                                    cardInsightReport = uiState.cardExpenseInsightReport
+                                )
+                                if (financeNote.isNotBlank()) {
+                                    ScheduleFinanceContextBar(text = financeNote)
+                                }
+                                Box(Modifier.weight(1f)) {
+                                    com.example.gemma4ondevicetest.schedule.ScheduleScreen(
+                                        uiState                  = uiState.scheduleUiState,
+                                        modelLoaded              = uiState.answerModelLoaded,
+                                        onRequestPermissions     = onScheduleRequestPermissions,
+                                        onRefresh                = onScheduleRefresh,
+                                        onToggleNotification     = onScheduleToggleNotification,
+                                        onTimeChanged            = onScheduleTimeChanged,
+                                        onRunNow                 = onScheduleRunNow
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -357,6 +429,8 @@ private fun AppTopBar(
         AppScreen.HOME            -> "WalletMate"
         AppScreen.CHAT            -> activeSession?.title ?: "새 대화"
         AppScreen.WALLET          -> "카드 사용내역"
+        AppScreen.SUBSCRIPTIONS   -> "정기결제 후보"
+        AppScreen.APP_USAGE       -> "사용 패턴 로그"
         AppScreen.MODEL           -> "모델 관리"
         AppScreen.STATUS          -> "실행 상태"
         AppScreen.DOCUMENTS       -> "문서 관리"
@@ -367,6 +441,8 @@ private fun AppTopBar(
         AppScreen.HOME            -> "온디바이스 금융 도우미"
         AppScreen.CHAT            -> "대화"
         AppScreen.WALLET          -> "삼성 Wallet 알림 기반 월간 소비 요약"
+        AppScreen.SUBSCRIPTIONS   -> "충전 완료 시 AI 배치 분석"
+        AppScreen.APP_USAGE       -> "Usage Access 기반 앱 사용 세션 DB"
         AppScreen.MODEL           -> "다운로드 · 로드 · 설정"
         AppScreen.STATUS          -> "현재 런타임 정보"
         AppScreen.DOCUMENTS       -> "지식 문서 추가 · 관리"
@@ -512,6 +588,8 @@ private fun AppDrawer(
     onOpenHome: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenWallet: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
+    onOpenAppUsage: () -> Unit,
     onOpenModel: () -> Unit,
     onOpenStatus: () -> Unit,
     onOpenDocuments: () -> Unit,
@@ -579,6 +657,18 @@ private fun AppDrawer(
                         label    = "카드 사용내역",
                         selected = currentScreen == AppScreen.WALLET,
                         onClick  = onOpenWallet
+                    )
+                    DrawerChannelRow(
+                        icon     = Icons.Outlined.Autorenew,
+                        label    = "정기결제 후보",
+                        selected = currentScreen == AppScreen.SUBSCRIPTIONS,
+                        onClick  = onOpenSubscriptions
+                    )
+                    DrawerChannelRow(
+                        icon     = Icons.Outlined.Timeline,
+                        label    = "사용 패턴 로그",
+                        selected = currentScreen == AppScreen.APP_USAGE,
+                        onClick  = onOpenAppUsage
                     )
                 }
 
@@ -843,12 +933,24 @@ private fun SessionItem(session: ChatSession, active: Boolean, onClick: () -> Un
 private fun HomeScreen(
     walletSummary: MonthlyCardSummary,
     walletPermissionGranted: Boolean,
+    subscriptionReport: SubscriptionAnalysisReport,
+    cardInsightReport: CardExpenseInsightReport,
+    cardInsightItems: List<CardExpenseInsightCandidate>,
     scheduleUiState: com.example.gemma4ondevicetest.schedule.ScheduleUiState,
     answerModelReady: Boolean,
+    appUsagePermissionGranted: Boolean,
+    appUsageSummary: AppUsageStatsSummary,
     onOpenWallet: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
     onOpenSchedule: () -> Unit,
-    onOpenChat: () -> Unit
+    onOpenChat: () -> Unit,
+    onOpenAppUsage: () -> Unit
 ) {
+    val walletDisplayAmount = cardExpenseDisplayAmount(
+        summary = walletSummary,
+        insightReport = cardInsightReport,
+        insightItems = cardInsightItems
+    )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -884,7 +986,7 @@ private fun HomeScreen(
                             )
                             Text(
                                 if (walletPermissionGranted) {
-                                    "${walletSummary.monthKey} 기준 ${formatWon(walletSummary.netSpent)} 사용, ${walletSummary.transactionCount}건이 기록되어 있습니다."
+                                    "${walletSummary.monthKey} 기준 ${formatWon(walletDisplayAmount)} 사용, ${cardInsightItems.size}건이 분석 기준으로 수집되어 있습니다."
                                 } else {
                                     "삼성 Wallet 알림 접근을 허용하면 월간 카드 사용내역이 자동으로 쌓입니다."
                                 },
@@ -903,17 +1005,40 @@ private fun HomeScreen(
         }
 
         item {
+            val topCategoryLine = if (cardInsightReport.categoryBreakdowns.isNotEmpty()) {
+                val top = cardInsightReport.categoryBreakdowns.first()
+                "${top.category} ${top.percentageOfTotal.toInt()}% · ${cardInsightReport.analyzedCandidateCount}건 분석됨"
+            } else if (cardInsightReport.pendingCount > 0) {
+                "분석 대기 ${cardInsightReport.pendingCount}건"
+            } else {
+                null
+            }
             HomeNavigationCard(
                 title = "카드 사용내역",
                 body = if (walletPermissionGranted) {
-                    "월간 합계와 최근 거래를 확인합니다."
+                    topCategoryLine ?: "월간 합계와 최근 거래를 확인합니다."
                 } else {
                     "알림 접근 권한을 연결하고 카드 승인 내역을 확인합니다."
                 },
-                badge = if (walletPermissionGranted) formatWon(walletSummary.netSpent) else "권한 필요",
+                badge = if (walletPermissionGranted) formatWon(walletDisplayAmount) else "권한 필요",
                 icon = Icons.Outlined.CreditCard,
                 accent = Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFEA580C))),
                 onClick = onOpenWallet
+            )
+        }
+
+        item {
+            HomeNavigationCard(
+                title = "정기결제 후보",
+                body = if (subscriptionReport.candidates.isNotEmpty()) {
+                    "AI가 추린 정기결제 후보 ${subscriptionReport.candidates.size}건과 놓치기 쉬운 결제 이벤트를 확인합니다."
+                } else {
+                    "금융 알림을 모아 충전 완료 시 정기결제 후보를 분석합니다."
+                },
+                badge = if (subscriptionReport.pendingCount > 0) "대기 ${subscriptionReport.pendingCount}건" else "후보 ${subscriptionReport.candidates.size}건",
+                icon = Icons.Outlined.Autorenew,
+                accent = Brush.linearGradient(listOf(Color(0xFF0F766E), Color(0xFF0E7490))),
+                onClick = onOpenSubscriptions
             )
         }
 
@@ -934,6 +1059,21 @@ private fun HomeScreen(
 
         item {
             HomeNavigationCard(
+                title = "사용 패턴 로그",
+                body = if (appUsagePermissionGranted) {
+                    "최근 ${appUsageSummary.totalSessions}개 세션이 DB에 저장되어 있습니다. 추후 개인화 학습용 로그를 확인합니다."
+                } else {
+                    "Usage Access 권한을 연결해 기기 전체 앱 사용 세션을 수집합니다."
+                },
+                badge = if (appUsagePermissionGranted) "${appUsageSummary.distinctPackageCount}개 앱" else "권한 필요",
+                icon = Icons.Outlined.Timeline,
+                accent = Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFF4338CA))),
+                onClick = onOpenAppUsage
+            )
+        }
+
+        item {
+            HomeNavigationCard(
                 title = "일정",
                 body = when {
                     !scheduleUiState.calendarPermission -> "캘린더 권한을 연결하고 다가오는 일정을 확인합니다."
@@ -948,6 +1088,26 @@ private fun HomeScreen(
                 icon = Icons.Outlined.CalendarMonth,
                 accent = Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF0F766E))),
                 onClick = onOpenSchedule
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScheduleFinanceContextBar(text: String) {
+    Surface(color = CAmber.copy(0.08f)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(Icons.Outlined.Lightbulb, null, Modifier.size(14.dp), tint = CAmber)
+            Text(
+                text,
+                style = MaterialTheme.typography.labelSmall,
+                color = CMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1003,48 +1163,35 @@ private fun WalletScreen(
     transactions: List<CardTransactionRecord>,
     permissionGranted: Boolean,
     selectedTransaction: CardTransactionRecord?,
-    notificationLogs: List<WalletNotificationLogEntry>,
+    insightReport: CardExpenseInsightReport,
+    insightHistory: List<CardExpenseMonthlyInsight>,
+    insightItems: List<CardExpenseInsightCandidate>,
+    insightRunning: Boolean,
     onOpenPermissionSettings: () -> Unit,
     onSelectTransaction: (CardTransactionRecord) -> Unit,
     onDismissTransaction: () -> Unit,
-    onClearLog: () -> Unit
+    onRunInsightAnalysis: () -> Unit = {},
+    onReanalyzeInsightAnalysis: () -> Unit = {},
+    onReanalyzeInsightItem: (CardExpenseInsightCandidate) -> Unit = {},
+    onResetInsightAnalysis: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedTab by remember { mutableStateOf(0) }
 
-    Column(Modifier.fillMaxSize()) {
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = CSurface,
-            contentColor = CPrimary
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                selectedContentColor = CPrimary,
-                unselectedContentColor = CMuted,
-                text = { Text("내역", style = MaterialTheme.typography.labelLarge) }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                selectedContentColor = CPrimary,
-                unselectedContentColor = CMuted,
-                text = { Text("알림 로그 (${notificationLogs.size})", style = MaterialTheme.typography.labelLarge) }
-            )
-        }
-
-        when (selectedTab) {
-            0 -> WalletTransactionsTab(
-                summary = summary,
-                transactions = transactions,
-                permissionGranted = permissionGranted,
-                onOpenPermissionSettings = onOpenPermissionSettings,
-                onSelectTransaction = onSelectTransaction
-            )
-            1 -> WalletNotificationLogTab(logs = notificationLogs, onClear = onClearLog)
-        }
-    }
+    WalletTransactionsTab(
+        summary = summary,
+        transactions = transactions,
+        permissionGranted = permissionGranted,
+        insightReport = insightReport,
+        insightHistory = insightHistory,
+        insightItems = insightItems,
+        insightRunning = insightRunning,
+        onOpenPermissionSettings = onOpenPermissionSettings,
+        onSelectTransaction = onSelectTransaction,
+        onRunAnalysis = onRunInsightAnalysis,
+        onReanalyze = onReanalyzeInsightAnalysis,
+        onReanalyzeItem = onReanalyzeInsightItem,
+        onResetAnalysis = onResetInsightAnalysis
+    )
 
     if (selectedTransaction != null) {
         ModalBottomSheet(
@@ -1067,13 +1214,162 @@ private fun WalletScreen(
 }
 
 @Composable
+private fun SubscriptionScreen(
+    report: SubscriptionAnalysisReport,
+    batteryStatus: BatteryGateStatus,
+    onRunAnalysis: () -> Unit
+) {
+    val remainingCooldown = SubscriptionAnalysisScheduler.remainingCooldownMillis(report.lastCompletedAt)
+    val cooldownActive = remainingCooldown > 0L
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Surface(shape = RoundedCornerShape(28.dp), color = CSurfaceHigh) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("분석 게이트", style = MaterialTheme.typography.labelLarge, color = CMuted)
+                    Text(
+                        when {
+                            !batteryStatus.isEligible -> "충전 중이며 100%일 때만 AI 분석이 실행됩니다."
+                            cooldownActive -> "최근 분석 완료 후 24시간이 지나야 다시 분석합니다."
+                            else -> "충전 중 100% 상태로 분석 가능합니다."
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = COnSurface
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SummaryPill(if (batteryStatus.isCharging) "충전 중" else "충전 아님")
+                        SummaryPill("배터리 ${batteryStatus.levelPercent}%")
+                        SummaryPill("대기 ${report.pendingCount}건")
+                        if (cooldownActive) {
+                            SummaryPill("재분석 ${SubscriptionAnalysisScheduler.formatRemainingCooldown(remainingCooldown)} 후")
+                        }
+                    }
+                    Text(report.statusMessage, style = MaterialTheme.typography.bodyMedium, color = CMuted)
+                    Button(
+                        onClick = onRunAnalysis,
+                        enabled = batteryStatus.isEligible && !cooldownActive,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Outlined.AutoAwesome, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("지금 분석")
+                    }
+                }
+            }
+        }
+
+        item {
+            Text("정기결제 후보", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = COnSurface)
+        }
+
+        if (report.candidates.isEmpty()) {
+            item {
+                Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("아직 추출된 후보가 없습니다.", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = COnSurface)
+                        Text("지원 금융 알림이 쌓인 뒤 충전 완료 상태에서 분석하면 후보가 여기에 표시됩니다.", style = MaterialTheme.typography.bodyMedium, color = CMuted)
+                    }
+                }
+            }
+        } else {
+            items(report.candidates, key = { it.id }) { candidate ->
+                Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                candidate.serviceName,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = COnSurface
+                            )
+                            if (candidate.amountText.isNotBlank()) {
+                                Text(candidate.amountText, style = MaterialTheme.typography.labelLarge, color = CPrimary)
+                            }
+                        }
+                        Text(candidate.reason.ifBlank { "반복 결제 가능성이 있는 알림입니다." }, style = MaterialTheme.typography.bodyMedium, color = CMuted)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SummaryPill(candidate.sourcePackage.substringAfterLast('.'))
+                            if (candidate.lastSeenAt > 0) {
+                                SummaryPill(formatTransactionTimestamp(candidate.lastSeenAt))
+                            }
+                            if (candidate.missableEvent) {
+                                SummaryPill("놓치기 쉬움")
+                            }
+                        }
+                        if (candidate.missableReason.isNotBlank()) {
+                            Text(candidate.missableReason, style = MaterialTheme.typography.labelMedium, color = CAmber)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun WalletTransactionsTab(
     summary: MonthlyCardSummary,
     transactions: List<CardTransactionRecord>,
     permissionGranted: Boolean,
+    insightReport: CardExpenseInsightReport,
+    insightHistory: List<CardExpenseMonthlyInsight>,
+    insightItems: List<CardExpenseInsightCandidate>,
+    insightRunning: Boolean,
     onOpenPermissionSettings: () -> Unit,
-    onSelectTransaction: (CardTransactionRecord) -> Unit
+    onSelectTransaction: (CardTransactionRecord) -> Unit,
+    onRunAnalysis: () -> Unit,
+    onReanalyze: () -> Unit = {},
+    onReanalyzeItem: (CardExpenseInsightCandidate) -> Unit = {},
+    onResetAnalysis: () -> Unit = {}
 ) {
+    val displayedAmount = cardExpenseDisplayAmount(summary, insightReport, insightItems)
+    var reportExpanded by rememberSaveable { mutableStateOf(false) }
+    var analysisItemsExpanded by rememberSaveable { mutableStateOf(false) }
+    var showResetConfirm by rememberSaveable { mutableStateOf(false) }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    onResetAnalysis()
+                }) { Text("초기화") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) { Text("취소") }
+            },
+            title = { Text("인사이트 초기화") },
+            text = {
+                Text(
+                    "현재 달 분석 결과와 카테고리, 그리고 저장된 월별 기록까지 모두 삭제합니다. " +
+                        "다시 분석하려면 '지금 분석' 또는 '전체 재분석'을 사용하세요."
+                )
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -1090,19 +1386,54 @@ private fun WalletTransactionsTab(
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("이번 달 누적", style = MaterialTheme.typography.labelLarge, color = CMuted)
-                    Text(
-                        formatWon(summary.netSpent),
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = COnSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("이번 달 누적", style = MaterialTheme.typography.labelLarge, color = CMuted)
+                            Text(
+                                formatWon(displayedAmount),
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                                color = COnSurface
+                            )
+                        }
+                        TextButton(onClick = { reportExpanded = !reportExpanded }) {
+                            Text(if (reportExpanded) "분석 리포트 닫기" else "분석 리포트 보기")
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                if (reportExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                                null,
+                                Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SummaryPill("승인 ${formatWon(summary.grossApproved)}")
-                        SummaryPill("취소 ${formatWon(summary.grossCancelled)}")
-                        SummaryPill("총 ${summary.transactionCount}건")
+                        SummaryPill("분석 기준 ${formatWon(displayedAmount)}")
+                        SummaryPill("분석 후보 ${insightItems.size}건")
+                        if (summary.grossCancelled > 0L) SummaryPill("취소 ${formatWon(summary.grossCancelled)}")
                     }
                 }
             }
+        }
+
+        if (reportExpanded) {
+            walletInsightReportItems(
+                report = insightReport,
+                history = insightHistory,
+                insightItems = insightItems,
+                insightRunning = insightRunning,
+                analysisItemsExpanded = analysisItemsExpanded,
+                onToggleAnalysisItems = { analysisItemsExpanded = !analysisItemsExpanded },
+                onRunAnalysis = onRunAnalysis,
+                onReanalyze = onReanalyze,
+                onReanalyzeItem = onReanalyzeItem,
+                onResetAnalysisRequest = { showResetConfirm = true }
+            )
         }
 
         if (!permissionGranted) {
@@ -1157,143 +1488,659 @@ private fun WalletTransactionsTab(
     }
 }
 
+// ─────────────────────── wallet insight tab ───────────────────────
+
+private val CATEGORY_COLORS = mapOf(
+    "식비"   to Color(0xFFF59E0B),
+    "교통"   to Color(0xFF3B82F6),
+    "쇼핑"   to Color(0xFFA855F7),
+    "구독"   to Color(0xFF14B8A6),
+    "주거/공과금" to Color(0xFF0EA5E9),
+    "생활"   to Color(0xFF22C55E),
+    "의료"   to Color(0xFFEF4444),
+    "교육"   to Color(0xFF84CC16),
+    "통신"   to Color(0xFF06B6D4),
+    "문화/여가" to Color(0xFFEC4899),
+    "금융"   to Color(0xFF6366F1),
+    "기타"   to Color(0xFF6B7280)
+)
+
+private fun categoryColor(category: String): Color =
+    CATEGORY_COLORS[category] ?: Color(0xFF6B7280)
+
 @Composable
-private fun WalletNotificationLogTab(
-    logs: List<WalletNotificationLogEntry>,
-    onClear: () -> Unit
+private fun WalletInsightTab(
+    report: CardExpenseInsightReport,
+    history: List<CardExpenseMonthlyInsight>,
+    insightItems: List<CardExpenseInsightCandidate>,
+    insightRunning: Boolean,
+    onRunAnalysis: () -> Unit,
+    onReanalyze: () -> Unit = {},
+    onReanalyzeItem: (CardExpenseInsightCandidate) -> Unit = {},
+    onResetAnalysis: () -> Unit = {}
 ) {
-    if (logs.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(32.dp)
-            ) {
-                Icon(Icons.Outlined.Notifications, null, Modifier.size(40.dp), tint = CMuted.copy(0.4f))
-                Text("아직 수신된 알림이 없습니다", style = MaterialTheme.typography.bodyMedium, color = CMuted)
+    var analysisItemsExpanded by rememberSaveable { mutableStateOf(false) }
+    var showResetConfirm by rememberSaveable { mutableStateOf(false) }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    onResetAnalysis()
+                }) { Text("초기화") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirm = false }) { Text("취소") }
+            },
+            title = { Text("인사이트 초기화") },
+            text = {
                 Text(
-                    "Samsung Wallet 알림이 도착하면 여기에 표시됩니다.\n알림 리스너 권한이 활성화되어 있는지 확인하세요.",
+                    "현재 달 분석 결과와 카테고리, 그리고 저장된 월별 기록까지 모두 삭제합니다. " +
+                        "다시 분석하려면 '지금 분석' 또는 '전체 재분석'을 사용하세요."
+                )
+            }
+        )
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        walletInsightReportItems(
+            report = report,
+            history = history,
+            insightItems = insightItems,
+            insightRunning = insightRunning,
+            analysisItemsExpanded = analysisItemsExpanded,
+            onToggleAnalysisItems = { analysisItemsExpanded = !analysisItemsExpanded },
+            onRunAnalysis = onRunAnalysis,
+            onReanalyze = onReanalyze,
+            onReanalyzeItem = onReanalyzeItem,
+            onResetAnalysisRequest = { showResetConfirm = true }
+        )
+    }
+}
+
+private fun LazyListScope.walletInsightReportItems(
+    report: CardExpenseInsightReport,
+    history: List<CardExpenseMonthlyInsight>,
+    insightItems: List<CardExpenseInsightCandidate>,
+    insightRunning: Boolean,
+    analysisItemsExpanded: Boolean,
+    onToggleAnalysisItems: () -> Unit,
+    onRunAnalysis: () -> Unit,
+    onReanalyze: () -> Unit = {},
+    onReanalyzeItem: (CardExpenseInsightCandidate) -> Unit = {},
+    onResetAnalysisRequest: () -> Unit = {}
+) {
+    val previousMonth = CardExpenseInsightHistoryReducer.findPreviousMonth(history, report.monthKey)
+    val displayPendingCount = insightItems.count { !it.isAnalyzed }.coerceAtLeast(report.pendingCount)
+    val analyzedItems = insightItems.filter { it.isAnalyzed }
+
+    item {
+        Surface(shape = RoundedCornerShape(28.dp), color = CSurfaceHigh) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("AI 카테고리 분석", style = MaterialTheme.typography.labelLarge, color = CMuted)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (insightRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = CPrimary
+                        )
+                    }
+                    Text(
+                        report.statusMessage,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = COnSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill("대기 ${displayPendingCount}건")
+                    if (report.analyzedCandidateCount > 0) {
+                        SummaryPill("분석 ${report.analyzedCandidateCount}건")
+                    }
+                    if (report.lastCompletedAt > 0L) {
+                        SummaryPill(formatTransactionTimestamp(report.lastCompletedAt))
+                    }
+                    if (report.generatedAt > 0L) {
+                        SummaryPill("갱신 ${formatTransactionTimestamp(report.generatedAt)}")
+                    }
+                }
+                Text(
+                    if (insightRunning) {
+                        "현재 단계가 바뀌면 이 영역이 자동으로 갱신됩니다."
+                    } else {
+                        "마지막 상태와 분석된 항목은 아래 분석 내역에서 확인할 수 있습니다."
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = CMuted.copy(0.6f),
-                    textAlign = TextAlign.Center
+                    color = CMuted
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onRunAnalysis,
+                        enabled = insightItems.any { !it.isAnalyzed } && !insightRunning,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("지금 분석")
+                    }
+                    OutlinedButton(
+                        onClick = onReanalyze,
+                        enabled = insightItems.isNotEmpty() && !insightRunning,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("전체 재분석")
+                    }
+                }
+                OutlinedButton(
+                    onClick = onResetAnalysisRequest,
+                    enabled = !insightRunning,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("초기화")
+                }
+                Text(
+                    "지금 분석: 대기 중인 내역만 분석 · 전체 재분석: 모든 내역을 처음부터 다시 분류 · 초기화: 분석/월별 기록 전체 삭제",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CMuted
+                )
+            }
+        }
+    }
+
+    if (report.totalAmount > 0L || previousMonth != null) {
+        item {
+            MonthlyInsightTrendCard(
+                currentReport = report,
+                previousMonth = previousMonth
+            )
+        }
+    }
+
+    if (report.categoryBreakdowns.isNotEmpty()) {
+        item {
+            Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        "카테고리별 비율",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = COnSurface
+                    )
+                    CategorySegmentBar(breakdowns = report.categoryBreakdowns)
+                    Spacer(Modifier.height(2.dp))
+                    CategoryLegendGrid(breakdowns = report.categoryBreakdowns)
+                }
+            }
+        }
+    }
+
+    if (report.categoryBreakdowns.isNotEmpty()) {
+        item {
+            Text(
+                "카테고리 상세",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = COnSurface
+            )
+        }
+        items(report.categoryBreakdowns, key = { it.category }) { bd ->
+            CategoryBreakdownCard(
+                bd = bd,
+                items = analyzedItems.filter { it.category == bd.category }
+            )
+        }
+    }
+
+    if (history.isNotEmpty()) {
+        item {
+            Text(
+                "월별 변화",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = COnSurface
+            )
+        }
+        items(history.take(6), key = { it.monthKey }) { historyItem ->
+            MonthlyHistoryCard(historyItem)
+        }
+    }
+
+    if (report.categoryBreakdowns.isEmpty() && displayPendingCount == 0) {
+        item {
+            Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("아직 카테고리 분석 결과가 없습니다.", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = COnSurface)
+                    Text("지원 금융 알림이 쌓이면 자동으로 카테고리 분석이 예약됩니다.", style = MaterialTheme.typography.bodyMedium, color = CMuted)
+                }
+            }
+        }
+    }
+
+    if (insightItems.isNotEmpty()) {
+        item {
+            CardInsightAnalysisHistorySection(
+                items = insightItems,
+                expanded = analysisItemsExpanded,
+                onToggle = onToggleAnalysisItems
+            )
+        }
+        if (analysisItemsExpanded) {
+            items(insightItems.take(30), key = { it.id }) { item ->
+                CardInsightAnalysisItemRow(
+                    item = item,
+                    analysisRunning = insightRunning,
+                    onReanalyze = { onReanalyzeItem(item) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardInsightAnalysisHistorySection(
+    items: List<CardExpenseInsightCandidate>,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val pendingCount = items.count { !it.isAnalyzed }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
+        shape = RoundedCornerShape(18.dp),
+        color = CSurfaceHigh
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.ReceiptLong, null, tint = CMuted, modifier = Modifier.size(20.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "분석 내역",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = COnSurface
+                )
+                Text(
+                    "총 ${items.size}건 · 대기 ${pendingCount}건 · 분석 ${items.size - pendingCount}건",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CMuted
+                )
+            }
+            Icon(
+                if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                null,
+                tint = CMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun CardInsightAnalysisItemRow(
+    item: CardExpenseInsightCandidate,
+    analysisRunning: Boolean = false,
+    onReanalyze: () -> Unit = {}
+) {
+    val analyzed = item.isAnalyzed
+    val statusColor = if (analyzed) CGreen else CAmber
+    Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(statusColor.copy(alpha = 0.14f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (analyzed) Icons.Outlined.CheckCircle else Icons.Outlined.Pending,
+                    null,
+                    tint = statusColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        item.title.ifBlank { item.merchantName.ifBlank { "카드 내역" } },
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = COnSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryPill(if (analyzed) "분석됨" else "대기")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SummaryPill(
+                        when (item.source) {
+                            CardExpenseInsightCandidateSource.INBOX -> "알림 후보"
+                            CardExpenseInsightCandidateSource.TRANSACTION -> "거래 내역"
+                        }
+                    )
+                    if (item.amount > 0L) SummaryPill(formatWon(item.amount))
+                    item.category?.let { SummaryPill(it) }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatTransactionTimestamp(item.postedAt),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CMuted
+                    )
+                    TextButton(
+                        onClick = onReanalyze,
+                        enabled = !analysisRunning,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Outlined.Refresh, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("재분석", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyInsightTrendCard(
+    currentReport: CardExpenseInsightReport,
+    previousMonth: CardExpenseMonthlyInsight?
+) {
+    val deltaAmount = previousMonth?.let { currentReport.totalAmount - it.totalAmount }
+    val deltaCount = previousMonth?.let { currentReport.totalCount - it.totalCount }
+    val topCategory = currentReport.categoryBreakdowns.firstOrNull()?.category
+
+    Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "월별 비교",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = COnSurface
+            )
+            Text(
+                "${currentReport.monthKey} 기준 ${formatWon(currentReport.totalAmount)}",
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = COnSurface
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("후보 ${currentReport.analyzedCandidateCount}건")
+                if (topCategory != null) SummaryPill("대표 $topCategory")
+                if (deltaAmount != null) {
+                    SummaryPill("전월 대비 ${formatSignedWon(deltaAmount)}")
+                }
+                if (deltaCount != null) {
+                    SummaryPill("건수 ${formatSignedCount(deltaCount)}")
+                }
+            }
+            if (previousMonth != null) {
+                Text(
+                    "지난달 ${previousMonth.monthKey} ${formatWon(previousMonth.totalAmount)} · ${previousMonth.totalCount}건",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CMuted
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyHistoryCard(item: CardExpenseMonthlyInsight) {
+    val topCategory = item.categoryBreakdowns.firstOrNull()
+    Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    item.monthKey,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = COnSurface
+                )
+                Text(
+                    formatWon(item.totalAmount),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = CPrimary
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SummaryPill("후보 ${item.analyzedCandidateCount}건")
+                SummaryPill("건수 ${item.totalCount}건")
+                if (topCategory != null) {
+                    SummaryPill("${topCategory.category} ${topCategory.percentageOfTotal.toInt()}%")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategorySegmentBar(breakdowns: List<ExpenseCategoryBreakdown>) {
+    val total = breakdowns.sumOf { it.totalAmount }.toFloat()
+    if (total <= 0f) {
+        // Percentage-only mode when amounts are 0
+        val count = breakdowns.size.toFloat().coerceAtLeast(1f)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(11.dp))
+        ) {
+            breakdowns.forEach { bd ->
+                Box(
+                    modifier = Modifier.fillMaxHeight().weight(1f / count)
+                        .background(categoryColor(bd.category))
                 )
             }
         }
         return
     }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(11.dp))
     ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "총 ${logs.size}건 · 최신순",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CMuted
-                )
-                TextButton(onClick = onClear) {
-                    Text("로그 지우기", color = CRed, style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
-        items(logs, key = { it.id }) { entry ->
-            NotificationLogItem(entry)
+        breakdowns.forEach { bd ->
+            val fraction = (bd.totalAmount.toFloat() / total).coerceAtLeast(0.02f)
+            Box(
+                modifier = Modifier.fillMaxHeight().weight(fraction)
+                    .background(categoryColor(bd.category))
+            )
         }
     }
 }
 
 @Composable
-private fun NotificationLogItem(entry: WalletNotificationLogEntry) {
-    val (outcomeColor, outcomeLabel) = when (entry.outcome) {
-        "saved"        -> CGreen to "저장됨"
-        "filtered"     -> CAmber to "필터됨"
-        "parse_failed" -> CRed   to "파싱실패"
-        "duplicate"    -> CMuted to "중복"
-        "received"     -> CMuted to "처리중"
-        else           -> CMuted to entry.outcome
-    }
-    Surface(shape = RoundedCornerShape(12.dp), color = CSurfaceHigh) {
-        Column(
-            Modifier.fillMaxWidth().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
+private fun CategoryLegendGrid(breakdowns: List<ExpenseCategoryBreakdown>) {
+    val rows = breakdowns.chunked(2)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        rows.forEach { pair ->
             Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    formatNotifTimestamp(entry.receivedAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CMuted
-                )
-                Box(
-                    Modifier
-                        .background(outcomeColor.copy(0.15f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        outcomeLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = outcomeColor
-                    )
+                pair.forEach { bd ->
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            Modifier.size(10.dp).background(categoryColor(bd.category), RoundedCornerShape(3.dp))
+                        )
+                        Text(
+                            "${bd.category} ${bd.percentageOfTotal.toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = COnSurface,
+                            maxLines = 1
+                        )
+                    }
                 }
-            }
-            Text(
-                entry.packageName,
-                style = MaterialTheme.typography.labelSmall,
-                color = CMuted.copy(0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (entry.title.isNotBlank()) {
-                Text(
-                    "제목: ${entry.title}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = COnSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            val body = listOf(entry.bigText, entry.text).firstOrNull { it.isNotBlank() }.orEmpty()
-            if (body.isNotBlank()) {
-                Text(
-                    body,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = COnSurface.copy(0.85f),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (entry.subText.isNotBlank()) {
-                Text(
-                    "sub: ${entry.subText}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CMuted.copy(0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (entry.outcomeDetail.isNotBlank()) {
-                Text(
-                    "→ ${entry.outcomeDetail}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = outcomeColor.copy(0.9f)
-                )
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
 }
 
-private fun formatNotifTimestamp(timestamp: Long): String =
-    SimpleDateFormat("MM.dd HH:mm:ss", Locale.KOREA).format(Date(timestamp))
+@Composable
+private fun CategoryBreakdownCard(
+    bd: ExpenseCategoryBreakdown,
+    items: List<CardExpenseInsightCandidate> = emptyList()
+) {
+    val color = categoryColor(bd.category)
+    var expanded by rememberSaveable(bd.category) { mutableStateOf(false) }
+    Surface(shape = RoundedCornerShape(20.dp), color = CSurfaceHigh) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(12.dp).background(color, RoundedCornerShape(4.dp)))
+                    Text(
+                        bd.category,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = COnSurface
+                    )
+                }
+                Text(
+                    "${bd.percentageOfTotal.toInt()}%",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = color
+                )
+            }
+            // 비율 미니 바
+            Box(
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
+                    .background(CSurfaceVar)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth((bd.percentageOfTotal / 100f).coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .background(color)
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    if (bd.totalAmount > 0L) formatWon(bd.totalAmount) else "${bd.count}건",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = COnSurface
+                )
+                Text("${bd.count}건", style = MaterialTheme.typography.bodySmall, color = CMuted)
+            }
+            if (bd.representativeNames.isNotEmpty()) {
+                Text(
+                    bd.representativeNames.take(3).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (items.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "이 카테고리 내역 ${items.size}건",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = color
+                    )
+                    Icon(
+                        if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                        null,
+                        tint = CMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                if (expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items.forEach { item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    item.merchantName.ifBlank { item.title.ifBlank { "카드 내역" } },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = COnSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (item.amount > 0L) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        formatWon(item.amount),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                        color = CMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun TransactionDetailSheet(transaction: CardTransactionRecord) {
@@ -1462,11 +2309,14 @@ private fun WalletTransactionItem(transaction: CardTransactionRecord, onClick: (
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = COnSurface
                 )
-                Text(
-                    listOfNotNull(transaction.cardLabel, transaction.approvedAt?.ifBlank { null }).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CMuted
-                )
+                val meta = listOfNotNull(transaction.cardLabel, transaction.approvedAt?.ifBlank { null }).joinToString(" · ")
+                if (meta.isNotBlank()) {
+                    Text(
+                        meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CMuted
+                    )
+                }
                 Text(
                     formatTransactionTimestamp(transaction.postedAt),
                     style = MaterialTheme.typography.labelSmall,
@@ -1485,6 +2335,19 @@ private fun WalletTransactionItem(transaction: CardTransactionRecord, onClick: (
 private fun formatWon(amount: Long): String =
     "${NumberFormat.getNumberInstance(Locale.KOREA).format(amount)}원"
 
+private fun cardExpenseDisplayAmount(
+    summary: MonthlyCardSummary,
+    insightReport: CardExpenseInsightReport,
+    insightItems: List<CardExpenseInsightCandidate>
+): Long {
+    val insightCollectedAmount = insightItems.sumOf { it.amount }
+    return when {
+        insightReport.totalAmount > 0L -> insightReport.totalAmount
+        insightCollectedAmount > 0L -> insightCollectedAmount
+        else -> summary.netSpent
+    }
+}
+
 private fun formatTransactionTimestamp(timestamp: Long): String =
     SimpleDateFormat("MM.dd HH:mm", Locale.KOREA).format(Date(timestamp))
 
@@ -1494,6 +2357,31 @@ private fun toolIcon(toolId: String): ImageVector = when (toolId) {
     "health"  -> Icons.Outlined.LocalHospital
     "edu"     -> Icons.Outlined.School
     else      -> Icons.AutoMirrored.Outlined.Article
+}
+
+private fun buildScheduleFinanceLine(
+    subscriptionReport: SubscriptionAnalysisReport,
+    cardInsightReport: CardExpenseInsightReport
+): String {
+    val parts = mutableListOf<String>()
+    if (cardInsightReport.categoryBreakdowns.isNotEmpty()) {
+        val top = cardInsightReport.categoryBreakdowns.first()
+        parts.add("대표 소비: ${top.category} ${top.percentageOfTotal.toInt()}%")
+    }
+    if (subscriptionReport.candidates.isNotEmpty()) {
+        parts.add("정기결제 후보 ${subscriptionReport.candidates.size}건")
+    }
+    return parts.joinToString(" · ")
+}
+
+private fun formatSignedWon(amount: Long): String {
+    val sign = if (amount >= 0) "+" else "-"
+    return sign + formatWon(kotlin.math.abs(amount))
+}
+
+private fun formatSignedCount(count: Int): String {
+    val sign = if (count >= 0) "+" else ""
+    return "${sign}${count}건"
 }
 
 // ─────────────────────── chat screen ───────────────────────
@@ -2388,6 +3276,231 @@ private fun ModelCard(title: String, subtitle: String, statusLabel: String, stat
     }
 }
 
+@Composable
+private fun AppUsageScreen(
+    permissionGranted: Boolean,
+    summary: AppUsageStatsSummary,
+    topApps: List<AppUsageTopApp>,
+    recentSessions: List<AppUsageSessionRecord>,
+    onOpenPermissionSettings: () -> Unit,
+    onRunSync: () -> Unit,
+    onExportCsv: () -> Unit,
+    onClearLog: () -> Unit
+) {
+    val context = LocalContext.current
+    var showAllowedAppsDialog by remember { mutableStateOf(false) }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Surface(shape = RoundedCornerShape(24.dp), color = CSurfaceHigh) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = { showAllowedAppsDialog = true }) {
+                            Icon(Icons.Outlined.Info, contentDescription = "허용 앱 보기", tint = CMuted)
+                        }
+                    }
+                    Button(
+                        onClick = onOpenPermissionSettings,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (permissionGranted) "권한 설정 열기" else "권한 허용하기")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onRunSync,
+                            enabled = permissionGranted,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("지금 동기화")
+                        }
+                        OutlinedButton(
+                            onClick = onClearLog,
+                            enabled = permissionGranted && summary.totalSessions > 0,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("DB 비우기")
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onExportCsv,
+                        enabled = permissionGranted && summary.totalSessions > 0,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("학습 CSV 내보내기")
+                    }
+                }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryMetricCard("세션 수", summary.totalSessions.toString(), Modifier.weight(1f))
+                SummaryMetricCard("앱 수", summary.distinctPackageCount.toString(), Modifier.weight(1f))
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryMetricCard("누적 시간", formatDurationCompact(summary.totalDurationSeconds), Modifier.weight(1f))
+                SummaryMetricCard(
+                    "마지막 동기화",
+                    formatDateTimeOrDash(summary.lastSyncedAtMillis),
+                    Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (topApps.isNotEmpty()) {
+            item {
+                Text(
+                    "상위 앱",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = COnSurface
+                )
+            }
+            items(topApps, key = { it.packageName }) { app ->
+                Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                resolveAppLabel(context, app.packageName),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = COnSurface
+                            )
+                            Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = CMuted)
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${app.sessionCount}회", style = MaterialTheme.typography.labelLarge, color = CPrimary)
+                            Text(formatDurationCompact(app.totalDurationSeconds), style = MaterialTheme.typography.bodySmall, color = CMuted)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Text(
+                "최근 세션",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = COnSurface
+            )
+        }
+
+        if (recentSessions.isEmpty()) {
+            item {
+                Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("저장된 사용 세션이 없습니다.", style = MaterialTheme.typography.titleSmall, color = COnSurface)
+                        Text("권한을 허용한 뒤 동기화를 실행하면 DB에 세션이 쌓입니다.", style = MaterialTheme.typography.bodySmall, color = CMuted)
+                    }
+                }
+            }
+        } else {
+            items(recentSessions, key = { it.id }) { session ->
+                Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            resolveAppLabel(context, session.packageName),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = COnSurface
+                        )
+                        HorizontalDivider(
+                            color = COutline.copy(alpha = 0.4f),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        UsagePropertyRow("패키지명", session.packageName)
+                        UsagePropertyRow("카테고리", AppUsageAllowlistPolicy.categoryLabel(context, session.appCategory))
+                        UsagePropertyRow("시작", formatDateTime(session.startedAtMillis))
+                        UsagePropertyRow("길이", formatDurationCompact(session.durationSeconds))
+                        UsagePropertyRow("요일", weekdayLabel(session.weekday))
+                        UsagePropertyRow("HHMM", session.hhmm.toString().padStart(4, '0'))
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAllowedAppsDialog) {
+        AlertDialog(
+            onDismissRequest = { showAllowedAppsDialog = false },
+            title = { Text("허용 앱 목록") },
+            text = { Text(AppUsageAllowlistPolicy.allowedAppNamesLabel()) },
+            confirmButton = {
+                TextButton(onClick = { showAllowedAppsDialog = false }) { Text("확인") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun UsagePropertyRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = CMuted,
+            modifier = Modifier.widthIn(min = 64.dp)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            color = COnSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun SummaryMetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Surface(shape = RoundedCornerShape(18.dp), color = CSurfaceHigh, modifier = modifier) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = CMuted)
+            Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = COnSurface)
+        }
+    }
+}
+
 // ─────────────────────── status screen ───────────────────────
 
 @Composable
@@ -2407,8 +3520,28 @@ private fun StatusScreen(uiState: AppUiState, activeSession: ChatSession?) {
                     StatusRow("답변 모델",       if (uiState.answerModelLoaded) "로드됨" else if (uiState.answerModelReady) "준비됨" else "없음", uiState.answerModelLoaded)
                     StatusRow("지식 도메인",     "${uiState.knowledgeTools.size}개 로드됨", uiState.knowledgeTools.isNotEmpty())
                     StatusRow("사용자 문서",     "${uiState.userDocuments.size}개", uiState.userDocuments.isNotEmpty())
+                    StatusRow("사용 패턴 권한",  if (uiState.appUsagePermissionGranted) "허용됨" else "없음", uiState.appUsagePermissionGranted)
+                    StatusRow("사용 패턴 세션",  "${uiState.appUsageSummary.totalSessions}건", uiState.appUsageSummary.totalSessions > 0)
                     if (uiState.lastLoadInfo.isNotBlank()) {
                         StatusRow("마지막 로드", uiState.lastLoadInfo, !uiState.lastLoadInfo.contains("실패"))
+                    }
+                }
+            }
+        }
+        if (uiState.appUsagePermissionGranted) {
+            item {
+                Card(
+                    shape  = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = CSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, COutline)
+                ) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("사용 패턴 DB", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = CMuted)
+                        Text(
+                            "앱 ${uiState.appUsageSummary.distinctPackageCount}개 · 누적 ${formatDurationCompact(uiState.appUsageSummary.totalDurationSeconds)} · 마지막 동기화 ${formatDateTimeOrDash(uiState.appUsageSummary.lastSyncedAtMillis)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = COnSurface
+                        )
                     }
                 }
             }
@@ -2442,5 +3575,41 @@ private fun StatusRow(label: String, value: String, active: Boolean) {
                 color = when { value == "로드됨" -> CGreen; !active -> CMuted; else -> COnSurface }
             )
         }
+    }
+}
+
+private fun resolveAppLabel(context: android.content.Context, packageName: String): String {
+    val packageManager = context.packageManager
+    return runCatching {
+        packageManager.getApplicationLabel(
+            packageManager.getApplicationInfo(packageName, 0)
+        ).toString()
+    }.getOrDefault(packageName)
+}
+
+private fun weekdayLabel(weekday: Int): String = when (weekday) {
+    1 -> "월"
+    2 -> "화"
+    3 -> "수"
+    4 -> "목"
+    5 -> "금"
+    6 -> "토"
+    7 -> "일"
+    else -> "-"
+}
+
+private fun formatDateTimeOrDash(timestampMillis: Long): String =
+    if (timestampMillis <= 0L) "—" else formatDateTime(timestampMillis)
+
+private fun formatDateTime(timestampMillis: Long): String =
+    SimpleDateFormat("MM-dd HH:mm", Locale.KOREA).format(Date(timestampMillis))
+
+private fun formatDurationCompact(seconds: Long): String {
+    val hours = seconds / 3600L
+    val minutes = (seconds % 3600L) / 60L
+    return when {
+        hours > 0L -> "${hours}시간 ${minutes}분"
+        minutes > 0L -> "${minutes}분"
+        else -> "${seconds}초"
     }
 }

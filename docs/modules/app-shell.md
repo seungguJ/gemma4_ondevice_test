@@ -29,7 +29,7 @@
 ## 진입점
 
 - 앱 시작: `MainActivity.onCreate()`
-- 모델 자동 로드: `autoLoadMainModel()`
+- 모델 로드: 사용자 명시 액션 또는 허용 조건을 통과한 Worker만 수행
 - 화면 전환: `GemmaApp(...)` 콜백 연결
 - 런타임 상태 동기화: `refreshRuntimeState()`
 

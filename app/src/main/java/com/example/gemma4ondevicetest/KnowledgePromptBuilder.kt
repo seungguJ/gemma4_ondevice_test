@@ -11,13 +11,29 @@ object KnowledgePromptBuilder {
         context: Context,
         routerResult: AgentRouter.Result,
         userPrompt: String,
-        history: String = ""
+        history: String = "",
+        internalDataContext: String = ""
     ): KnowledgePromptResult {
         val rawSections = routerResult.categories.mapNotNull { category ->
             runCatching { loadText(context, category) }.getOrNull()
                 ?.let { category to it }
         }
-        if (rawSections.isEmpty()) return KnowledgePromptResult(userPrompt, null)
+        if (rawSections.isEmpty()) {
+            val fallbackPrompt = buildString {
+                appendLine("반드시 한국어로만 답하라.")
+                if (internalDataContext.isNotBlank()) {
+                    appendLine()
+                    appendLine(internalDataContext)
+                }
+                if (history.isNotBlank()) {
+                    appendLine()
+                    appendLine(history)
+                }
+                appendLine()
+                append("현재 질문: $userPrompt")
+            }
+            return KnowledgePromptResult(fallbackPrompt, null)
+        }
 
         // 동일 분류 문서 그룹화 후 character budget 적용
         val sections = buildSectionsWithBudget(rawSections)
@@ -34,6 +50,10 @@ object KnowledgePromptBuilder {
             appendLine()
             if (routerResult.contextPrompt.isNotBlank()) {
                 appendLine(routerResult.contextPrompt)
+                appendLine()
+            }
+            if (internalDataContext.isNotBlank()) {
+                appendLine(internalDataContext)
                 appendLine()
             }
             appendLine("Markdown 제목(#, ##)이나 표는 쓰지 말고, 모바일에서 읽기 쉬운 짧은 문단과 간단한 불릿만 사용하라.")

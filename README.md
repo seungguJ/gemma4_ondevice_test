@@ -1,7 +1,7 @@
 # WalletMate
 
 LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.  
-현재 프로젝트는 `홈`, `카드 사용내역`, `일정`, `채팅 세션`, `모델 런타임`, `지식 문서 라우팅`, `문서 업로드`, `빌드/에셋`, `삼성 Wallet 알림 분석` 모듈로 나뉩니다.
+현재 프로젝트는 `홈`, `카드 사용내역`, `일정`, `채팅 세션`, `모델 런타임`, `지식 문서 라우팅`, `문서 업로드`, `빌드/에셋`, `삼성 Wallet 알림 분석`, `기기 전체 앱 사용 로그` 모듈로 나뉩니다.
 
 이 README는 전체 인덱스 역할만 합니다. 상세 동작은 모듈별 문서를 먼저 읽는 것이 효율적입니다.
 
@@ -44,6 +44,7 @@ LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.
 │       │   ├── ManifestLoader.kt
 │       │   ├── DocumentImporter.kt
 │       │   ├── ChatSessionStore.kt
+│       │   ├── usage/
 │       │   └── schedule/
 │       └── res/
 ├── docs/
@@ -67,10 +68,23 @@ LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.
 
 ## Module View
 
-![WalletMate module view](docs/diagrams/module-view.svg?v=2)
+![WalletMate module view](docs/diagrams/module-view.svg?v=3)
 
 PlantUML source: `docs/diagrams/module-view.puml`
-`App Preferences`는 `SharedPreferences` 기반의 세션, 모델 선택, 일정 설정, 카드 거래 저장소를 묶어 표현한 것입니다.
+`App Preferences`는 채팅 세션, 모델 선택, 일정 설정 같은 SharedPreferences 저장소를 묶어 표현한 것입니다. Wallet 데이터는 `Wallet SharedPreferences`, 앱 사용 로그는 `app_usage_logs.db`로 분리해 표현합니다.
+
+## DB / Storage View
+
+| 저장소 | 매체 | 주요 테이블/키 | 보관 정책 | 소유 모듈 |
+|---|---|---|---|---|
+| `app_usage_logs.db` | SQLite | `app_usage_sessions`, `app_usage_meta` | raw 세션 7일 | App Usage Logging |
+| `notification_inbox_store` | SharedPreferences JSON | `month_key`, `entries` | 당월 raw 알림 최대 400건 | Wallet Notification Intake |
+| `wallet_card_transactions` | SharedPreferences JSON | `stored_month`, `records` | 당월 카드 거래 | Card Expense Ledger |
+| `card_expense_insight_candidates` | SharedPreferences JSON | `analyzed_transaction_ids`, `candidate_categories` | 당월 분석 상태 | Card Expense Insight |
+| `card_expense_insight_store` | SharedPreferences JSON | `insight_report`, `insight_history` | 현재 월 리포트 + 최대 12개월 history | Card Expense Insight |
+| `subscription_insight_store` | SharedPreferences JSON | `analysis_report` | 최근 정기결제 분석 리포트 | Subscription Analysis |
+
+현재 코드 기준으로 SQLite 테이블은 앱 사용 로그에만 있습니다. Wallet 쪽은 아직 Room/SQLite가 아니라 SharedPreferences JSON 저장소이며, 데이터가 커지면 `notification_inbox_store`, `wallet_card_transactions`, `card_expense_insight_store` 순서로 SQLite/Room 승격 후보입니다.
 
 ## 모듈 문서
 
@@ -85,6 +99,7 @@ PlantUML source: `docs/diagrams/module-view.puml`
 - `wallet-transaction-parser`: 삼성 Wallet 알림 문구에서 카드 사용 데이터 추출
 - `card-expense-ledger`: 거래 저장, 중복 제거, 집계
 - `wallet-expense-feature`: 기능 전체 오케스트레이션과 구현 순서
+- `app-usage-personalization-plan`: 기기 전체 앱 사용 로그 수집 현황과 개인화 확장 계획
 
 ## 요구사항별로 먼저 볼 파일
 
@@ -101,6 +116,9 @@ PlantUML source: `docs/diagrams/module-view.puml`
 | 삼성 Wallet 알림에서 카드 금액 파싱 구현 | `docs/modules/wallet-transaction-parser.md` | `wallet/WalletNotificationParser.kt`, `wallet/WalletNotificationModels.kt` |
 | 카드 거래 저장/월별 합계/중복 제거 구현 | `docs/modules/card-expense-ledger.md` | `wallet/CardTransactionStore.kt`, `wallet/CardExpenseRepository.kt` |
 | 기능 전체 연결 순서와 화면 반영 | `docs/modules/wallet-expense-feature.md` | `MainActivity.kt`, `GemmaComposeUi.kt`, `wallet/*` |
+| 기기 전체 앱 사용 로그 DB/뷰어 구현 | `docs/app-usage-personalization-plan.md` | `usage/*`, `MainActivity.kt`, `GemmaComposeUi.kt`, `AndroidManifest.xml` |
+
+현재 앱 사용 로그 수집은 모든 앱을 저장하지 않고, `사용자 지정 packageName 우선 allowlist + 앱 라벨 fallback` 기준으로만 저장합니다. raw 세션은 최대 7일만 보관하고, 뷰어에서 현재 7일 데이터를 `next app` 학습 예제 CSV로 내보낼 수 있습니다. 세부 정책은 `docs/app-usage-personalization-plan.md`를 참고합니다.
 
 ## 빠른 읽기 순서
 
@@ -116,8 +134,8 @@ PlantUML source: `docs/diagrams/module-view.puml`
 - 지식 응답은 현재 Function Calling이 아니라 키워드 매칭 기반 라우팅입니다.
 - 업로드한 문서는 앱 내부 저장소와 override manifest로 병합됩니다.
 - 일정 기능은 별도 `schedule` 패키지로 분리되어 있습니다.
-- 삼성 Wallet 알림 분석 기능은 아직 미구현이며, 문서로 먼저 모듈 경계를 정의한 상태입니다.
-- 삼성 Wallet 기능은 AI 없이 알림 수집, 규칙 기반 파싱, 당월 집계만으로 설계합니다.
+- 삼성 Wallet 알림 분석 기능은 Notification inbox, 당월 거래 집계, 정기결제 후보 분석, 카드 인사이트 요약까지 연결되어 있습니다.
+- 삼성 Wallet raw 알림과 거래 데이터는 당월만 유지하고, 카드 인사이트는 월간 summary snapshot으로 최대 12개월 비교합니다.
 
 ## 상세 문서
 
@@ -132,5 +150,6 @@ PlantUML source: `docs/diagrams/module-view.puml`
 - `docs/modules/wallet-transaction-parser.md`
 - `docs/modules/card-expense-ledger.md`
 - `docs/modules/wallet-expense-feature.md`
+- `docs/app-usage-personalization-plan.md`
 - `docs/agent_runtime.md`
 - `ARCHITECTURE.md`

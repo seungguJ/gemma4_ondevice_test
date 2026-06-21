@@ -4,7 +4,7 @@
 
 파싱된 카드 거래를 저장하고, 중복 제거와 집계를 담당하는 모듈입니다.
 
-이 모듈의 목표는 "장기 거래 내역 보관"이 아니라 "당월 카드 사용량 계산"입니다.
+이 모듈의 목표는 "장기 거래 raw 보관"이 아니라 "당월 카드 사용량 계산 + 전월 비교용 월간 요약 보존"입니다.
 
 ## 제안 패키지 구조
 
@@ -23,7 +23,7 @@ app/src/main/java/com/example/gemma4ondevicetest/wallet/
 - 로컬 저장소 접근
 - 처음 구현은 `SharedPreferences`, JSON 파일, 또는 간단한 로컬 DB로 시작 가능
 - 추후 Room으로 교체 가능
-- 현재 요구사항 기준으로는 "당월 데이터만 유지" 정책을 구현
+- 현재 요구사항 기준으로는 raw 거래는 당월만 유지하고, 카드 인사이트 월간 요약은 별도 저장소에서 보존
 
 ### `CardExpenseRepository.kt`
 
@@ -62,14 +62,28 @@ CardTransactionRecord
 - dedupeKey
 ```
 
+## 현재 저장 구현
+
+`CardTransactionStore`는 아직 Room/SQLite가 아니라 `SharedPreferences("wallet_card_transactions")`에 JSON 배열로 저장합니다.
+
+| 키 | 값 | 설명 |
+|---|---|---|
+| `records` | `CardTransactionRecord[]` JSON | 당월 카드 거래 원본 |
+| `stored_month` | `yyyy-MM` | 저장소가 마지막으로 유지한 월 키 |
+
+`records`의 JSON 필드는 `CardTransactionRecord`와 동일하게 `id`, `monthKey`, `sourcePackage`, `notificationKey`, `approvedAt`, `postedAt`, `cardLabel`, `merchantName`, `amount`, `currency`, `status`, `rawTitle`, `rawBody`, `createdAt`, `dedupeKey`를 저장합니다.
+
+현재 집계는 DB materialized view가 아니라 `CardExpenseRepository.getMonthlySummary()`가 `records`를 읽어 `grossApproved`, `grossCancelled`, `netSpent`를 계산하는 방식입니다.
+
 ## 권장 저장 정책
 
 - 월 단위 리셋 정책을 기본으로 합니다.
-- 현재 월 데이터만 유지합니다.
-- 월이 바뀌면 raw 저장소와 transaction 저장소를 모두 비웁니다.
+- 현재 월 raw 데이터만 유지합니다.
+- 월이 바뀌면 공통 notification inbox의 이전 달 raw 상태와 transaction 저장소를 모두 비웁니다.
 - 1차 구현은 append-only보다 upsert 형태가 안전합니다.
 - 취소 알림은 초기 버전에서 `취소 합계` 또는 `음수 효과`로 반영합니다.
 - 월별 합계는 조회 시 계산하는 단순 구조가 적합합니다.
+- 전월 비교에 필요한 카테고리 합계와 요약은 `CardExpenseInsightStore` history에 snapshot으로 남깁니다.
 
 ## 월 리셋 규칙
 
@@ -80,8 +94,9 @@ CardTransactionRecord
   - 알림 수집 시
   - 저장 직전
 - `storedMonth != currentMonth` 이면:
-  - raw 알림 저장소 삭제
+  - notification inbox의 이전 달 raw 상태 삭제
   - 카드 거래 저장소 삭제
+  - 카드 인사이트 현재 리포트를 월간 summary로 아카이브
   - 현재 월 키 갱신
 
 ## 저장 대상 규칙
@@ -89,7 +104,7 @@ CardTransactionRecord
 저장 대상:
 
 - 삼성 Wallet 출처
-- 카드 승인 또는 카드 취소로 판정된 알림
+- 카드 정보가 없어도 승인 또는 카드 취소로 판정된 알림
 - 파서 필수 조건을 만족한 거래
 
 저장 제외:

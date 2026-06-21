@@ -11,13 +11,13 @@ object WalletNotificationParser {
             return fail(raw, "비카드 금융 키워드 포함")
         }
 
+        if (!WalletParserRules.hasRequiredPaymentKeyword(combined)) {
+            return fail(raw, "`결제 완료` 문구 없음")
+        }
+
         val status = WalletParserRules.detectStatus(combined)
         if (status == TransactionStatus.UNKNOWN) {
             return fail(raw, "승인/취소 상태 키워드 없음")
-        }
-
-        if (!WalletParserRules.hasCardKeyword(combined)) {
-            return fail(raw, "카드성 키워드 없음")
         }
 
         val amount = WalletParserRules.parseAmount(combined)
@@ -25,10 +25,9 @@ object WalletNotificationParser {
 
         val approvedAt = WalletParserRules.parseApprovedAt(combined)
         val installmentText = WalletParserRules.parseInstallment(combined)
-        val cardLabel = extractCardLabel(combined)
-        val merchantName = extractMerchantName(combined, cardLabel, amount)
+        val merchantName = extractMerchantName(combined, amount)
 
-        val dedupeKey = buildDedupeKey(status, amount, approvedAt, raw.postedAt, merchantName, cardLabel)
+        val dedupeKey = buildDedupeKey(status, amount, approvedAt, raw.postedAt, merchantName)
 
         return ParseResult.Success(
             ParsedCardTransaction(
@@ -36,7 +35,7 @@ object WalletNotificationParser {
                 notificationKey = raw.notificationKey,
                 monthKey = raw.monthKey,
                 approvedAt = approvedAt,
-                cardLabel = cardLabel,
+                cardLabel = null,
                 merchantName = merchantName,
                 amount = amount,
                 currency = "KRW",
@@ -49,19 +48,7 @@ object WalletNotificationParser {
         )
     }
 
-    private fun extractCardLabel(text: String): String? {
-        // 구체적인 카드사명을 먼저 매칭해야 "카드" 단독 키워드보다 우선됨
-        val cardKeywords = listOf(
-            "삼성카드", "현대카드", "신한카드", "KB국민카드", "롯데카드",
-            "우리카드", "하나카드", "BC카드", "NH농협카드", "씨티카드",
-            "카카오카드", "토스카드", "IBK기업카드", "수협카드", "광주카드",
-            "전북카드", "제주카드", "우체국카드", "새마을금고카드", "신협카드",
-            "체크카드", "신용카드"
-        )
-        return cardKeywords.firstOrNull { text.contains(it) }
-    }
-
-    private fun extractMerchantName(text: String, cardLabel: String?, amount: Long): String? {
+    fun extractMerchantName(text: String, amount: Long): String? {
         // 금액+원 패턴 이후 / 파이프 구분 / 날짜 패턴 이전에 위치한 텍스트를 가맹점으로 추정
         val amountFormatted = amount.toAmountString()
         val afterAmount = when {
@@ -87,10 +74,7 @@ object WalletNotificationParser {
             .replace(WalletParserRules.INSTALLMENT, "")
             .trim()
 
-        // 카드명 제거
-        val withoutCard = if (cardLabel != null) cleaned.replace(cardLabel, "").trim() else cleaned
-
-        return withoutCard.takeIf { it.isNotBlank() }
+        return cleaned.takeIf { it.isNotBlank() }
     }
 
     private fun buildDedupeKey(
@@ -98,11 +82,10 @@ object WalletNotificationParser {
         amount: Long,
         approvedAt: String?,
         postedAt: Long,
-        merchantName: String?,
-        cardLabel: String?
+        merchantName: String?
     ): String {
         val timeKey = approvedAt ?: postedAt.toString()
-        return "${status}|${amount}|${timeKey}|${merchantName ?: ""}|${cardLabel ?: ""}"
+        return "${status}|${amount}|${timeKey}|${merchantName ?: ""}"
     }
 
     private fun fail(raw: WalletRawNotification, reason: String): ParseResult.Failure =

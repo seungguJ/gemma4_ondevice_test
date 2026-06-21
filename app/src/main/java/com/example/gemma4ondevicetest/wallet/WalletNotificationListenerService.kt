@@ -6,22 +6,19 @@ import android.util.Log
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import java.util.UUID
 
 class WalletNotificationListenerService : NotificationListenerService() {
 
     private lateinit var coordinator: WalletExpenseCoordinator
-    private lateinit var logStore: WalletNotificationLogStore
+    private lateinit var subscriptionCoordinator: SubscriptionAnalysisCoordinator
 
     override fun onCreate() {
         super.onCreate()
-        logStore = WalletNotificationLogStore(applicationContext)
-        coordinator = WalletExpenseCoordinator(applicationContext, logStore)
+        coordinator = WalletExpenseCoordinator(applicationContext)
+        subscriptionCoordinator = SubscriptionAnalysisCoordinator(applicationContext)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName !in WalletParserRules.ALLOWED_PACKAGES) return
-
         val extras = sbn.notification.extras
         val title = extras.getString("android.title") ?: ""
         val text = extras.getCharSequence("android.text")?.toString() ?: ""
@@ -38,21 +35,6 @@ class WalletNotificationListenerService : NotificationListenerService() {
         }
         val subText = extras.getCharSequence("android.subText")?.toString() ?: ""
 
-        logStore.append(
-            WalletNotificationLogEntry(
-                id = UUID.randomUUID().toString(),
-                receivedAt = sbn.postTime,
-                packageName = sbn.packageName,
-                title = title,
-                text = text,
-                bigText = bigText,
-                subText = subText,
-                notificationKey = sbn.key,
-                outcome = "received",
-                outcomeDetail = ""
-            )
-        )
-
         val now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
         val monthKey = now.format(DateTimeFormatter.ofPattern("yyyy-MM"))
 
@@ -68,7 +50,16 @@ class WalletNotificationListenerService : NotificationListenerService() {
             notificationKey = sbn.key
         )
 
-        coordinator.onRawNotification(raw)
+        if (sbn.packageName in WalletParserRules.ALLOWED_PACKAGES ||
+            WalletParserRules.titleIndicatesCard(title)
+        ) {
+            coordinator.onRawNotification(raw)
+        }
+
+        if (SubscriptionAnalysisRules.supportsPackage(sbn.packageName)) {
+            subscriptionCoordinator.onRawNotification(raw)
+            Log.d(TAG, "subscription notification queued: $title")
+        }
     }
 
     companion object {

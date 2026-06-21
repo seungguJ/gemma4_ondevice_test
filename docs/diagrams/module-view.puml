@@ -6,11 +6,12 @@ skinparam shadowing false
 package "UI Layer" {
   [App Shell\nMainActivity / GemmaComposeUi]
   [Schedule UI\nScheduleScreen]
+  [App Usage Viewer\nAppUsageScreen]
 }
 
 package "Core Runtime" {
   [Chat Session]
-  [Model Runtime]
+  [Model Runtime Gate\nModelRuntimeGate / LlmEngine]
   [Knowledge Routing]
   [Document Import]
 }
@@ -20,35 +21,51 @@ package "Feature Modules" {
   [Wallet Notification Intake]
   [Wallet Transaction Parser]
   [Card Expense Ledger]
+  [Subscription Analysis]
+  [Card Expense Insight]
+  [App Usage Logging]
 }
 
 package "Data / Assets" {
   [Bundled Knowledge Assets]
   [User Knowledge Storage]
   [App Preferences]
+  [Wallet SharedPreferences]
+  [App Usage SQLite\napp_usage_logs.db]
   [Model Files]
 }
 
 [App Shell\nMainActivity / GemmaComposeUi] --> [Chat Session]
-[App Shell\nMainActivity / GemmaComposeUi] --> [Model Runtime]
+[App Shell\nMainActivity / GemmaComposeUi] --> [Model Runtime Gate\nModelRuntimeGate / LlmEngine]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Knowledge Routing]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Document Import]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Schedule]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Card Expense Ledger]
+[App Shell\nMainActivity / GemmaComposeUi] --> [Subscription Analysis]
+[App Shell\nMainActivity / GemmaComposeUi] --> [Card Expense Insight]
+[App Shell\nMainActivity / GemmaComposeUi] --> [App Usage Logging]
 
 [Schedule UI\nScheduleScreen] --> [Schedule]
-[Schedule] --> [Model Runtime]
+[App Usage Viewer\nAppUsageScreen] --> [App Usage Logging]
+[Schedule] --> [Model Runtime Gate\nModelRuntimeGate / LlmEngine]
 
 [Knowledge Routing] --> [Bundled Knowledge Assets]
 [Knowledge Routing] --> [User Knowledge Storage]
 [Document Import] --> [User Knowledge Storage]
 [Chat Session] --> [App Preferences]
-[Model Runtime] --> [Model Files]
-[Model Runtime] --> [App Preferences]
+[Model Runtime Gate\nModelRuntimeGate / LlmEngine] --> [Model Files]
+[Model Runtime Gate\nModelRuntimeGate / LlmEngine] --> [App Preferences]
 [Schedule] --> [App Preferences]
 
 [Wallet Notification Intake] --> [Wallet Transaction Parser]
+[Wallet Notification Intake] --> [Subscription Analysis]
+[Wallet Notification Intake] --> [Card Expense Insight]
 [Wallet Transaction Parser] --> [Card Expense Ledger]
-[Card Expense Ledger] --> [App Preferences]
+[Card Expense Ledger] --> [Wallet SharedPreferences]
+[Subscription Analysis] --> [Wallet SharedPreferences]
+[Subscription Analysis] --> [Model Runtime Gate\nModelRuntimeGate / LlmEngine]
+[Card Expense Insight] --> [Wallet SharedPreferences]
+[Card Expense Insight] --> [Model Runtime Gate\nModelRuntimeGate / LlmEngine]
+[App Usage Logging] --> [App Usage SQLite\napp_usage_logs.db]
 [App Shell\nMainActivity / GemmaComposeUi] --> [Wallet Notification Intake]
 @enduml

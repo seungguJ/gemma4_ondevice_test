@@ -75,13 +75,17 @@ object CalendarReader {
             while (cursor.moveToNext()) {
                 val title   = cursor.getString(titleIdx).orEmpty().ifBlank { "(제목 없음)" }
                 val beginMs = cursor.getLong(beginIdx)
+                val endMs = cursor.getLong(endIdx)
+                if (!isUpcomingEvent(beginMs, endMs, cursor.getInt(allDayIdx) == 1, now)) {
+                    continue
+                }
                 val dedupeKey = "$title|${formatDateLabel(beginMs)}"
                 if (!seen.containsKey(dedupeKey)) {
                     seen[dedupeKey] = CalendarEvent(
                         id          = cursor.getLong(idIdx),
                         title       = title,
                         startMillis = beginMs,
-                        endMillis   = cursor.getLong(endIdx),
+                        endMillis   = endMs,
                         isAllDay    = cursor.getInt(allDayIdx) == 1,
                         location    = cursor.getString(locIdx)
                     )
@@ -89,6 +93,20 @@ object CalendarReader {
             }
         }
         return seen.values.toList()
+    }
+
+    private fun isUpcomingEvent(
+        beginMs: Long,
+        endMs: Long,
+        isAllDay: Boolean,
+        now: ZonedDateTime
+    ): Boolean {
+        val start = Instant.ofEpochMilli(beginMs).atZone(ZONE)
+        if (isAllDay) {
+            return !start.toLocalDate().isBefore(now.toLocalDate())
+        }
+        val end = Instant.ofEpochMilli(endMs).atZone(ZONE)
+        return !start.isBefore(now) && !end.isBefore(now)
     }
 
     fun formatEventTime(event: CalendarEvent): String {

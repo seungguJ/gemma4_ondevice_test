@@ -3,10 +3,7 @@ package com.example.gemma4ondevicetest.wallet
 import android.content.Context
 import android.util.Log
 
-class WalletExpenseCoordinator(
-    context: Context,
-    private val logStore: WalletNotificationLogStore
-) {
+class WalletExpenseCoordinator(context: Context) {
 
     private val store = CardTransactionStore(context)
     private val repository = CardExpenseRepository(store)
@@ -17,24 +14,21 @@ class WalletExpenseCoordinator(
         if (!WalletNotificationFilter.shouldProcess(raw)) {
             val reason = filterReason(raw)
             Log.d(TAG, "filtered out: ${raw.title} ($reason)")
-            logStore.updateOutcome(raw.notificationKey, "filtered", reason)
             return
         }
 
-        when (val result = WalletNotificationParser.parse(raw)) {
+        val result = WalletNotificationParser.parse(raw)
+        when (result) {
             is ParseResult.Success -> {
                 val saved = repository.saveParsedTransaction(result.transaction, raw.postedAt)
                 if (saved == null) {
                     Log.d(TAG, "duplicate skipped: ${raw.notificationKey}")
-                    logStore.updateOutcome(raw.notificationKey, "duplicate", "dedupeKey 중복")
                 } else {
                     Log.i(TAG, "saved: ${saved.merchantName} ${saved.amount}원 [${saved.status}]")
-                    logStore.updateOutcome(raw.notificationKey, "saved", "${saved.merchantName ?: ""} ${saved.amount}원")
                 }
             }
             is ParseResult.Failure -> {
                 Log.w(TAG, "parse failed: ${result.failure.reason} | ${raw.title} ${raw.text}")
-                logStore.updateOutcome(raw.notificationKey, "parse_failed", result.failure.reason)
             }
         }
     }

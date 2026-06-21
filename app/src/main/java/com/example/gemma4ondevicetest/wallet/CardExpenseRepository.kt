@@ -6,7 +6,7 @@ class CardExpenseRepository(private val store: CardTransactionStore) {
 
     fun saveParsedTransaction(parsed: ParsedCardTransaction, postedAt: Long): CardTransactionRecord? {
         val existing = store.loadByMonth(parsed.monthKey)
-        if (CardExpenseDeduplicator.isDuplicate(parsed, existing)) return null
+        if (CardExpenseDeduplicator.isDuplicate(parsed, postedAt, existing)) return null
 
         val record = CardTransactionRecord(
             id = UUID.randomUUID().toString(),

@@ -23,6 +23,7 @@ app/src/main/java/com/example/gemma4ondevicetest/wallet/
 
 - `NotificationListenerService` 구현
 - `onNotificationPosted()`에서 알림 원문 수집
+- `NotificationInboxStore`에 raw 알림을 공통 포맷으로 upsert
 - 삼성 Wallet 패키지 여부 1차 필터링
 - 파싱 모듈로 넘길 원시 데이터 구성
 - 월 변경 여부 확인 후 저장소 리셋 트리거
@@ -124,7 +125,38 @@ WalletRawNotification
 - raw 알림도 무제한 저장하지 않습니다.
 - 당월 카드 후보 알림만 저장합니다.
 - 월 키는 `Asia/Seoul` 기준 `yyyy-MM` 을 사용합니다.
+- raw 알림 원본은 `NotificationInboxStore` 한 곳에 저장하고, 기능별 분석 여부는 해당 inbox 엔트리의 상태 플래그로 관리합니다.
 - 월 변경 감지 시 raw 저장소는 전부 비웁니다.
+
+## 현재 Inbox 저장소
+
+`NotificationInboxStore`는 `SharedPreferences("notification_inbox_store")`를 사용합니다.
+
+| 키 | 값 | 설명 |
+|---|---|---|
+| `month_key` | `yyyy-MM` | 현재 저장 중인 월 |
+| `entries` | `NotificationInboxEntry[]` JSON | 당월 raw 알림과 기능별 상태 |
+
+`NotificationInboxEntry` 필드:
+
+```text
+id
+monthKey
+packageName
+appLabel
+postedAt
+title
+text
+bigText
+subText
+notificationKey
+subscriptionEligible
+subscriptionAnalyzedAt
+cardInsightEligible
+cardInsightAnalyzedAt
+```
+
+현재 최대 저장 개수는 400건입니다. `SubscriptionNotificationStore`와 `CardExpenseCandidateStore`는 별도 raw 복사본을 만들지 않고 이 inbox를 adapter처럼 사용합니다.
 
 ## 이 모듈의 출력
 

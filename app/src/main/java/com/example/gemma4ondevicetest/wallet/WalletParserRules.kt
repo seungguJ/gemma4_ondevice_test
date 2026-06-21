@@ -24,6 +24,10 @@ object WalletParserRules {
     // 상태 키워드
     val CANCEL_KEYWORDS = listOf("취소", "승인취소", "결제취소", "국내승인취소", "해외승인취소")
     val APPROVE_KEYWORDS = listOf("승인", "결제", "사용", "국내승인", "해외승인")
+    val REQUIRED_PAYMENT_KEYWORDS = listOf("결제 완료")
+
+    // 제목에 이 단어가 있으면 삼성월렛 외 앱 알림도 카드 지출로 받는다.
+    const val CARD_TITLE_KEYWORD = "카드"
 
     // 카드성 키워드
     val CARD_KEYWORDS = listOf(
@@ -80,7 +84,9 @@ object WalletParserRules {
         }
     }
 
+    fun hasRequiredPaymentKeyword(text: String) = REQUIRED_PAYMENT_KEYWORDS.any { text.contains(it) }
     fun hasCardKeyword(text: String) = CARD_KEYWORDS.any { text.contains(it) }
+    fun titleIndicatesCard(title: String) = title.contains(CARD_TITLE_KEYWORD)
     fun hasExcludeKeyword(text: String) = EXCLUDE_KEYWORDS.any { text.contains(it) }
     fun hasFinanceKeyword(text: String) = FINANCE_KEYWORDS.any { text.contains(it) }
 }

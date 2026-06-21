@@ -10,7 +10,7 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   echo "1. Log in to Hugging Face."
   echo "2. Accept the Gemma license for ${MODEL_REPO}."
   echo "3. Create a read token."
-  echo "4. Run: HF_TOKEN=hf_xxx scripts/download_function_gemma.sh"
+  echo "4. Run: HF_TOKEN=<your_huggingface_read_token> scripts/download_function_gemma.sh"
   exit 1
 fi
 

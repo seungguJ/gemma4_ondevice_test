@@ -51,10 +51,6 @@ object ScheduleWorkScheduler {
         )
     }
 
-    fun scheduleTestIn60Seconds(context: Context) {
-        setAlarmClock(context, System.currentTimeMillis() + 60_000L)
-    }
-
     private fun setAlarmClock(context: Context, triggerAtMillis: Long) {
         val am = context.getSystemService(AlarmManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) return
