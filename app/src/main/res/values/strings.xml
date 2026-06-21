@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WalletMate</string>
+    <string name="app_name">Flow</string>
     <string name="pick_model">모델 선택</string>
     <string name="pick_function_gemma">Function Gemma 분류 모델 선택</string>
     <string name="open_function_gemma_link">Function Gemma 다운로드 페이지 열기</string>
@@ -17,7 +17,7 @@
     <string name="nav_chat">채팅</string>
     <string name="nav_model">모델</string>
     <string name="nav_status">상태</string>
-    <string name="toolbar_title">WalletMate</string>
+    <string name="toolbar_title">Flow</string>
     <string name="toolbar_subtitle">온디바이스 금융 도우미</string>
     <string name="chat_empty_title">대화를 시작할 준비가 됐습니다</string>
     <string name="chat_empty_body">모델을 로드한 뒤 질문을 보내면 응답이 이 영역에 표시됩니다.</string>

@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "gemma4_ondevice_test"
+rootProject.name = "flow"
 include(":app")

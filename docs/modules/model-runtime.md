@@ -21,7 +21,7 @@
 
 ## 저장 구조
 
-- 사용자 가시 저장 위치: `Download/gemma4_ondevice_test/`
+- 사용자 가시 저장 위치: `Download/flow/`
 - 앱 런타임 복사 위치: `filesDir/llm_runtime/`
 
 ## 핵심 흐름

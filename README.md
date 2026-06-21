@@ -1,4 +1,4 @@
-# WalletMate
+# Flow
 
 LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.  
 현재 프로젝트는 `홈`, `카드 사용내역`, `일정`, `채팅 세션`, `모델 런타임`, `지식 문서 라우팅`, `문서 업로드`, `빌드/에셋`, `삼성 Wallet 알림 분석`, `기기 전체 앱 사용 로그` 모듈로 나뉩니다.
@@ -68,7 +68,7 @@ LiteRT-LM 기반 온디바이스 금융 도우미 Android 앱입니다.
 
 ## Module View
 
-![WalletMate module view](docs/diagrams/module-view.svg?v=3)
+![Flow module view](docs/diagrams/module-view.svg?v=4)
 
 PlantUML source: `docs/diagrams/module-view.puml`
 `App Preferences`는 채팅 세션, 모델 선택, 일정 설정 같은 SharedPreferences 저장소를 묶어 표현한 것입니다. Wallet 데이터는 `Wallet SharedPreferences`, 앱 사용 로그는 `app_usage_logs.db`로 분리해 표현합니다.

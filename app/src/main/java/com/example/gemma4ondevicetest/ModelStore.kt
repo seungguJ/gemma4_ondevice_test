@@ -14,7 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object ModelStore {
-    private const val PUBLIC_DIR = "Download/gemma4_ondevice_test"
+    private const val PUBLIC_DIR = "Download/flow"
     private const val RUNTIME_DIR = "llm_runtime"
     private const val PREFS_NAME = "model_store"
     private const val KEY_SELECTED_MODEL = "selected_model"
@@ -316,7 +316,7 @@ object ModelStore {
 
     private fun getLegacyDownloadsFile(source: ModelSource): File {
         val downloadsRoot = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        return File(File(downloadsRoot, "gemma4_ondevice_test"), source.fileName)
+        return File(File(downloadsRoot, "flow"), source.fileName)
     }
 
     private fun clearRuntimeCopy(context: Context, source: ModelSource) {

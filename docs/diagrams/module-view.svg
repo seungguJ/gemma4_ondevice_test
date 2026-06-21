@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1180" height="720" viewBox="0 0 1180 720" role="img" aria-labelledby="title desc">
-  <title id="title">WalletMate module view</title>
+  <title id="title">Flow module view</title>
   <desc id="desc">Module view for UI, runtime, feature modules, and data stores.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">

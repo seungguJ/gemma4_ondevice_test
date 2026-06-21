@@ -426,7 +426,7 @@ private fun AppTopBar(
     onCloseDocument: () -> Unit
 ) {
     val title = when (currentScreen) {
-        AppScreen.HOME            -> "WalletMate"
+        AppScreen.HOME            -> "Flow"
         AppScreen.CHAT            -> activeSession?.title ?: "새 대화"
         AppScreen.WALLET          -> "카드 사용내역"
         AppScreen.SUBSCRIPTIONS   -> "정기결제 후보"
@@ -744,7 +744,7 @@ private fun DrawerHeader(modelLabel: String, modelLoaded: Boolean) {
             ) {
                 Icon(Icons.Outlined.AutoAwesome, null, tint = CPrimary, modifier = Modifier.size(20.dp))
             }
-            Text("WalletMate", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = COnSurface)
+            Text("Flow", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = COnSurface)
             Text(modelLabel, style = MaterialTheme.typography.bodySmall, color = CMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             StatusChip(if (modelLoaded) "모델 준비됨" else "모델 미로드", modelLoaded)
         }
@@ -2492,7 +2492,7 @@ private fun EmptyChatView(kind: ChatKind) {
         }
         Spacer(Modifier.height(20.dp))
         Text(
-            "WalletMate AI 어시스턴트",
+            "Flow AI 어시스턴트",
             style     = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             color     = COnSurface,
             textAlign = TextAlign.Center
